@@ -108,12 +108,12 @@ Each HPP section includes embedded guidance, a compliance rating, and space to r
 
 ## Data & Privacy
 
-- All form data is stored in your browser's `localStorage` — it never leaves your device
-- No data is transmitted to any server
-- PDF reports are generated entirely client-side using [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) and [jsPDF](https://github.com/parallax/jsPDF)
+- Form data is stored in your browser's `localStorage`
+- Some app pages do load third party scripts - [cdn.tailwindcss.com] and [cdnjs.cloudflare.com] In normal browser usage, requests send client metadata (such as IP/user agent/referrer) off-device
+- PDF reports are generated  client-side using [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) and [jsPDF](https://github.com/parallax/jsPDF)
 - Progress is saved automatically as you type; you can close and return at any time
 - Each tool includes a **Reset** button to permanently clear all saved data for that form
-- No cookies, no analytics, no third-party data collection
+- No cookies, no analytics
 
 ---
 
