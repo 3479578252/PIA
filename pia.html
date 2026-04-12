@@ -1148,9 +1148,16 @@ function closePreview() {
 function exportPDF() {
   collectCurrentStepData();
   generateReportHTML();
-  const el = document.getElementById('report-content');
   const dateStr = new Date().toISOString().split('T')[0];
   const filename = `PIA-${state.projectOverview.projectName || 'Assessment'}-${dateStr}.pdf`;
+
+  // Copy report content into a temp element at the document origin so
+  // html2canvas captures it without any modal/scroll offset interference.
+  const el = document.createElement('div');
+  el.innerHTML = document.getElementById('report-content').innerHTML;
+  el.style.cssText = 'position:absolute;left:0;top:0;width:794px;margin:0;padding:0;background:white;';
+  document.body.insertBefore(el, document.body.firstChild);
+  window.scrollTo(0, 0);
 
   document.getElementById('loading-overlay').style.display = 'flex';
 
@@ -1158,14 +1165,28 @@ function exportPDF() {
     margin: [15, 15, 15, 15],
     filename: filename,
     image: { type: 'jpeg', quality: 0.95 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 794,
+      scrollX: 0,
+      scrollY: 0,
+      ignoreElements: (node) =>
+        node.id === 'loading-overlay' ||
+        node.id === 'report-preview-modal' ||
+        node.tagName === 'HEADER'
+    },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.page-break' }
   };
 
   html2pdf().set(options).from(el).save().then(() => {
+    document.body.removeChild(el);
     document.getElementById('loading-overlay').style.display = 'none';
   }).catch(err => {
+    document.body.removeChild(el);
     document.getElementById('loading-overlay').style.display = 'none';
     alert('PDF generation failed: ' + err.message);
   });
