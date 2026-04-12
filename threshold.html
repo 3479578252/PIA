@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Do I Need a PIA? — Threshold Check</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>tailwind.config = { theme: { extend: { colors: { primary: '#1e40af' } } } }</script>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+<!-- Header -->
+<header class="bg-teal-700 text-white shadow-lg sticky top-0 z-40">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-4">
+    <a href="index.html" class="text-teal-200 hover:text-white text-sm flex-shrink-0">← Home</a>
+    <div>
+      <h1 class="text-base font-bold">Do I Need a PIA? — Threshold Check</h1>
+      <p class="text-xs text-teal-200">Health Records Act 2001 (Vic) &amp; Privacy Act 1988 (Cth)</p>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-3xl mx-auto px-4 py-8">
+
+  <!-- Intro -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+    <h2 class="text-xl font-bold mb-2">About your project</h2>
+    <p class="text-sm text-slate-500 mb-4">This check helps you work out whether your project needs a Privacy Impact Assessment (PIA) under the Health Records Act 2001 (Vic) or the Privacy Act 1988 (Cth). Answer all 10 questions and we'll tell you what to do next.</p>
+    <label class="block text-sm font-medium text-slate-700 mb-1">Project name <span class="text-slate-400 font-normal">(optional — used for your decision record)</span></label>
+    <input id="project-name" type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g. New patient management system">
+  </div>
+
+  <!-- Progress indicator -->
+  <div class="flex items-center justify-between mb-4">
+    <p class="text-sm text-slate-500"><span id="answered-count">0</span> of 10 questions answered</p>
+    <div class="flex items-center gap-2">
+      <div class="w-36 bg-slate-200 rounded-full h-2">
+        <div id="q-progress" class="bg-teal-600 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions -->
+  <div class="space-y-4" id="questions-container"></div>
+
+  <!-- Result panel (hidden until all answered) -->
+  <div id="result-panel" class="mt-8 rounded-xl border-2 p-6 hidden">
+    <h3 class="text-xl font-bold mb-2" id="result-heading"></h3>
+    <p class="text-sm leading-relaxed mb-5" id="result-explanation"></p>
+    <div class="flex flex-wrap gap-3" id="result-actions"></div>
+  </div>
+
+</main>
+
+<script>
+// ── Question definitions ─────────────────────────────────────────────────────
+// group: 'type' = information-type questions (Q1–Q2)
+// group: 'risk' = risk-factor questions (Q3–Q10)
+
+const QUESTIONS = [
+  {
+    id: 1,
+    group: 'type',
+    text: 'Does your project collect, use, or store health information?',
+    example: 'Under the Health Records Act 2001 (Vic) s 3, "health information" includes personal information collected to provide a "health service" — which covers not just clinical and medical services, but also disability services, palliative care services, and aged care services. This means personal information such as names, contact details, or care records collected in those contexts is health information for the purposes of this check.'
+  },
+  {
+    id: 2,
+    group: 'type',
+    text: 'Does your project collect, use, or store personal information that is not health information?',
+    example: 'Personal information includes names, contact details, dates of birth, financial information, employment records, identity documents, location data, or online identifiers — anything that identifies or could identify a person. Note: if this information is collected to provide a health service (including a disability, palliative care, or aged care service), answer Yes to Question 1 instead.'
+  },
+  {
+    id: 3,
+    group: 'risk',
+    text: 'Will this information be shared with another organisation, system, or service provider?',
+    example: 'For example: sending records to a specialist or partner agency, sharing data with a technology vendor, or using a cloud-based service to store or process information.'
+  },
+  {
+    id: 4,
+    group: 'risk',
+    text: 'Will this information be used for a new or different purpose than it was originally collected for?',
+    example: 'For example: using records for research or quality improvement, repurposing data for reporting or funding claims, or applying information in a way the person would not have expected.'
+  },
+  {
+    id: 5,
+    group: 'risk',
+    text: 'Does the project involve particularly sensitive information?',
+    example: 'For example: mental health records, HIV/AIDS status, genetic information, substance use, reproductive health, financial details, identity documents, biometric data, or information about a person\'s race, religion, or sexuality.'
+  },
+  {
+    id: 6,
+    group: 'risk',
+    text: 'Will the project use new technology or software to store, manage, or process this information?',
+    example: 'For example: implementing a new system, using an app or cloud platform, or introducing automated data processing or artificial intelligence tools.'
+  },
+  {
+    id: 7,
+    group: 'risk',
+    text: 'Will this information be accessible online, through an app, or via a portal?',
+    example: 'For example: individuals logging in to view their own records, or staff accessing information remotely from outside the organisation.'
+  },
+  {
+    id: 8,
+    group: 'risk',
+    text: 'Will the project combine information from different databases or sources?',
+    example: 'For example: linking records from multiple systems, combining datasets from different services, or joining information from internal and external sources.'
+  },
+  {
+    id: 9,
+    group: 'risk',
+    text: 'If this information was lost, stolen, or accessed without permission — could this seriously harm someone?',
+    example: 'For example: could it affect their safety, employment, finances, insurance, housing, relationships, or cause them significant embarrassment or distress?'
+  },
+  {
+    id: 10,
+    group: 'risk',
+    text: 'Does the project involve information about 500 or more people?',
+    example: 'Count all individuals whose information will be collected, used, or stored as part of this project.'
+  }
+];
+
+const answers = {};
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+function renderQuestions() {
+  const container = document.getElementById('questions-container');
+  let html = '';
+
+  // Section: What type of information is involved?
+  html += `
+    <div class="flex items-center gap-3 mt-2 mb-1">
+      <div class="flex-1 h-px bg-slate-200"></div>
+      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Step 1 — What type of information is involved?</span>
+      <div class="flex-1 h-px bg-slate-200"></div>
+    </div>`;
+
+  QUESTIONS.filter(q => q.group === 'type').forEach(q => {
+    html += renderCard(q);
+  });
+
+  // Section: Risk factors
+  html += `
+    <div class="flex items-center gap-3 mt-4 mb-1">
+      <div class="flex-1 h-px bg-slate-200"></div>
+      <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">Step 2 — Risk factors</span>
+      <div class="flex-1 h-px bg-slate-200"></div>
+    </div>`;
+
+  QUESTIONS.filter(q => q.group === 'risk').forEach(q => {
+    html += renderCard(q);
+  });
+
+  container.innerHTML = html;
+}
+
+function renderCard(q) {
+  return `
+    <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" id="q-card-${q.id}">
+      <div class="flex gap-3">
+        <span class="flex-shrink-0 w-7 h-7 rounded-full bg-teal-600 text-white text-sm font-bold flex items-center justify-center mt-0.5">${q.id}</span>
+        <div class="flex-1">
+          <p class="font-medium text-slate-800 mb-1 leading-snug">${q.text}</p>
+          <p class="text-xs text-slate-400 mb-4 leading-relaxed">${q.example}</p>
+          <div class="flex flex-wrap gap-4">
+            <label class="flex items-center gap-2 cursor-pointer group">
+              <input type="radio" name="q${q.id}" value="yes" onchange="onAnswer(${q.id}, 'yes')" class="accent-red-500 w-4 h-4">
+              <span class="text-sm font-semibold text-red-600">Yes</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer group">
+              <input type="radio" name="q${q.id}" value="not_sure" onchange="onAnswer(${q.id}, 'not_sure')" class="accent-amber-500 w-4 h-4">
+              <span class="text-sm font-semibold text-amber-600">Not sure</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer group">
+              <input type="radio" name="q${q.id}" value="no" onchange="onAnswer(${q.id}, 'no')" class="accent-green-500 w-4 h-4">
+              <span class="text-sm font-semibold text-green-600">No</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Answer handling ──────────────────────────────────────────────────────────
+
+function onAnswer(qId, value) {
+  answers[qId] = value;
+
+  const card = document.getElementById(`q-card-${qId}`);
+  card.classList.remove('border-red-300', 'border-amber-300', 'border-green-300', 'bg-red-50', 'bg-amber-50', 'bg-green-50');
+  if (value === 'yes')           card.classList.add('border-red-300',   'bg-red-50');
+  else if (value === 'not_sure') card.classList.add('border-amber-300', 'bg-amber-50');
+  else                           card.classList.add('border-green-300', 'bg-green-50');
+
+  const count = Object.keys(answers).length;
+  document.getElementById('answered-count').textContent = count;
+  document.getElementById('q-progress').style.width = (count / 10 * 100) + '%';
+
+  if (count === 10) {
+    setTimeout(showResult, 300);
+  } else {
+    document.getElementById('result-panel').classList.add('hidden');
+  }
+}
+
+// ── Scoring & routing ────────────────────────────────────────────────────────
+
+// Returns 'health', 'personal', 'both', or 'neither'
+function getInfoType() {
+  const q1 = answers[1]; // health
+  const q2 = answers[2]; // personal
+  const involvesHealth   = q1 === 'yes' || q1 === 'not_sure';
+  const involvesPersonal = q2 === 'yes' || q2 === 'not_sure';
+  if (involvesHealth && involvesPersonal) return 'both';
+  if (involvesHealth)   return 'health';
+  if (involvesPersonal) return 'personal';
+  return 'neither';
+}
+
+// Score only the risk questions (Q3–Q10)
+function getRiskScore() {
+  return QUESTIONS
+    .filter(q => q.group === 'risk')
+    .reduce((sum, q) => {
+      const a = answers[q.id];
+      if (a === 'yes')      return sum + 1;
+      if (a === 'not_sure') return sum + 0.5;
+      return sum;
+    }, 0);
+}
+
+// ── Result display ───────────────────────────────────────────────────────────
+
+function showResult() {
+  const infoType  = getInfoType();
+  const riskScore = getRiskScore();
+  const panel     = document.getElementById('result-panel');
+  panel.classList.remove('hidden');
+
+  let heading, explanation, bgClass, borderClass, actionsHtml;
+
+  if (infoType === 'neither') {
+    // No personal or health information involved
+    heading     = '✅ A PIA is not required';
+    explanation = 'Based on your answers, your project does not appear to involve personal or health information. You don\'t need to complete a Privacy Impact Assessment. If this changes during the project, revisit this check. Keep a copy of this decision on your project file.';
+    bgClass     = 'bg-green-50';
+    borderClass = 'border-green-400';
+    actionsHtml = `
+      <button onclick="downloadDecisionRecord()" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors">Download Decision Record (PDF)</button>
+      <a href="index.html" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition-colors">← Back to Tools</a>`;
+
+  } else if (riskScore < 3) {
+    // Low risk — no PIA needed regardless of type
+    heading     = '✅ A PIA is likely not required';
+    explanation = 'Based on your answers, your project has a low privacy risk profile. You probably don\'t need to complete a Privacy Impact Assessment. However, you should still document this decision and make sure your project follows your organisation\'s privacy policies. Keep a copy of this check on your project file.';
+    bgClass     = 'bg-green-50';
+    borderClass = 'border-green-400';
+    actionsHtml = `
+      <button onclick="downloadDecisionRecord()" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors">Download Decision Record (PDF)</button>
+      <a href="index.html" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition-colors">← Back to Tools</a>`;
+
+  } else if (riskScore < 6) {
+    // Moderate risk — recommend short assessment based on info type
+    heading     = '🟡 A Short Privacy Assessment is recommended';
+    bgClass     = 'bg-amber-50';
+    borderClass = 'border-amber-400';
+
+    if (infoType === 'health') {
+      explanation = 'Based on your answers, your project involves health information with a moderate privacy risk. We recommend completing a Short Privacy Assessment (Health Information) under the Health Records Act 2001 (Vic). This plain-English form covers the key Health Privacy Principles and produces a PDF report you can keep on file.';
+      actionsHtml = `
+        <a href="shortform.html" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors">Start Health Information Assessment →</a>
+        <button onclick="downloadDecisionRecord()" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors">Download Decision Record (PDF)</button>`;
+
+    } else if (infoType === 'personal') {
+      explanation = 'Based on your answers, your project involves personal information with a moderate privacy risk. We recommend completing a Short Privacy Assessment (Personal Information) under the Australian Privacy Principles (Privacy Act 1988 (Cth)). This plain-English form covers the key APPs and produces a PDF report you can keep on file.';
+      actionsHtml = `
+        <a href="shortform-personal.html" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors">Start Personal Information Assessment →</a>
+        <button onclick="downloadDecisionRecord()" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors">Download Decision Record (PDF)</button>`;
+
+    } else {
+      // both
+      explanation = 'Based on your answers, your project involves both health information and personal information with a moderate privacy risk. You should complete a Short Privacy Assessment for each type. Choose the assessment that matches your primary information type, or complete both.';
+      actionsHtml = `
+        <a href="shortform.html" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors">Start Health Information Assessment →</a>
+        <a href="shortform-personal.html" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors">Start Personal Information Assessment →</a>
+        <button onclick="downloadDecisionRecord()" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors">Download Decision Record (PDF)</button>`;
+    }
+
+  } else {
+    // High risk — full PIA required
+    heading     = '🔴 A Full Privacy Impact Assessment is required';
+    bgClass     = 'bg-red-50';
+    borderClass = 'border-red-400';
+
+    if (infoType === 'health' || infoType === 'both') {
+      explanation = 'Based on your answers, your project has a high privacy risk profile. You need to complete a full Privacy Impact Assessment (PIA). The Full PIA covers all 11 Health Privacy Principles under the Health Records Act 2001 (Vic) and is required for complex or high-risk projects. Please speak with your organisation\'s Privacy Officer if you need help getting started.';
+    } else {
+      explanation = 'Based on your answers, your project has a high privacy risk profile. You need to complete a full Privacy Impact Assessment (PIA). Please speak with your organisation\'s Privacy Officer to determine the applicable legislation and the correct assessment framework for your project.';
+    }
+    actionsHtml = `
+      <a href="pia.html" class="px-5 py-2.5 bg-primary hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">Start Full PIA →</a>
+      <button onclick="downloadDecisionRecord()" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors">Download Decision Record (PDF)</button>`;
+  }
+
+  panel.className = `mt-8 rounded-xl border-2 p-6 ${bgClass} ${borderClass}`;
+  document.getElementById('result-heading').textContent   = heading;
+  document.getElementById('result-explanation').textContent = explanation;
+  document.getElementById('result-actions').innerHTML     = actionsHtml;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── PDF export ───────────────────────────────────────────────────────────────
+
+function downloadDecisionRecord() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+  const infoType  = getInfoType();
+  const riskScore = getRiskScore();
+  const projectName = document.getElementById('project-name').value || 'Not specified';
+  const date = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  // Info type label
+  const infoTypeLabel = {
+    health:   'Health information (Health Records Act 2001 (Vic))',
+    personal: 'Personal information (Privacy Act 1988 (Cth))',
+    both:     'Health information and personal information',
+    neither:  'No personal or health information identified'
+  }[infoType];
+
+  // Outcome
+  let outcome, outcomeR, outcomeG, outcomeB;
+  if (infoType === 'neither' || riskScore < 3) {
+    outcome = 'PIA not required';
+    outcomeR = 22; outcomeG = 163; outcomeB = 74;
+  } else if (riskScore < 6) {
+    outcome = 'Short Privacy Assessment recommended';
+    outcomeR = 217; outcomeG = 119; outcomeB = 6;
+  } else {
+    outcome = 'Full Privacy Impact Assessment required';
+    outcomeR = 220; outcomeG = 38; outcomeB = 38;
+  }
+
+  const ansLabel = v => v === 'yes' ? 'Yes' : v === 'not_sure' ? 'Not sure' : 'No';
+  const pageW = 210, marginL = 15, marginR = 15, contentW = pageW - marginL - marginR;
+  let y = 20;
+
+  const checkPage = (needed = 10) => {
+    if (y + needed > 282) { doc.addPage(); y = 20; }
+  };
+
+  // ── Header ──
+  doc.setFillColor(15, 118, 110);
+  doc.rect(marginL, y, contentW, 0.8, 'F');
+  y += 5;
+
+  doc.setFontSize(9); doc.setTextColor(100, 116, 139);
+  doc.text('Health Records Act 2001 (Vic) \u2022 Privacy Act 1988 (Cth)', marginL, y); y += 6;
+
+  doc.setFontSize(16); doc.setTextColor(15, 118, 110); doc.setFont('helvetica', 'bold');
+  doc.text('PIA Threshold Check \u2014 Decision Record', marginL, y); y += 7;
+
+  doc.setFontSize(9); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
+  doc.text(`Generated ${date}`, marginL, y); y += 5;
+
+  doc.setFillColor(15, 118, 110);
+  doc.rect(marginL, y, contentW, 0.5, 'F');
+  y += 5;
+
+  // ── Summary table ──
+  const labelX = marginL, valueX = marginL + 48;
+  const summaryRows = [
+    ['Project',          projectName],
+    ['Date completed',   date],
+    ['Information type', infoTypeLabel],
+    ['Risk score',       `${riskScore} out of 8`],
+  ];
+  summaryRows.forEach(([label, value]) => {
+    checkPage(8);
+    // handle long values with word wrap
+    const wrapped = doc.setFont('helvetica', 'bold').setFontSize(10)
+                       .splitTextToSize(value, contentW - 50);
+    doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+    doc.text(label, labelX, y);
+    doc.setFontSize(10); doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold');
+    doc.text(wrapped, valueX, y);
+    y += wrapped.length > 1 ? wrapped.length * 5.5 : 6;
+  });
+
+  // Outcome row (coloured)
+  checkPage(8);
+  doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal');
+  doc.text('Outcome', labelX, y);
+  doc.setFontSize(10); doc.setTextColor(outcomeR, outcomeG, outcomeB); doc.setFont('helvetica', 'bold');
+  doc.text(outcome, valueX, y);
+  y += 10;
+
+  // ── Section: Information type ──
+  checkPage(10);
+  doc.setFontSize(9); doc.setTextColor(51, 65, 85); doc.setFont('helvetica', 'bold');
+  doc.text('STEP 1 — INFORMATION TYPE', marginL, y); y += 4;
+  doc.setFillColor(226, 232, 240);
+  doc.rect(marginL, y, contentW, 0.4, 'F');
+  y += 4;
+
+  doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'bold');
+  doc.text('Question', marginL, y);
+  doc.text('Answer', pageW - marginR - 18, y);
+  y += 3;
+  doc.setFillColor(226, 232, 240);
+  doc.rect(marginL, y, contentW, 0.3, 'F');
+  y += 4;
+
+  QUESTIONS.filter(q => q.group === 'type').forEach(q => {
+    const ans   = answers[q.id] || 'no';
+    const label = ansLabel(ans);
+    const qText = `${q.id}. ${q.text}`;
+    const lines = doc.setFont('helvetica', 'normal').setFontSize(9)
+                     .splitTextToSize(qText, contentW - 25);
+    const rowH = lines.length * 5.5 + 9;
+    checkPage(rowH);
+
+    doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(lines, marginL, y + 3);
+
+    let aR, aG, aB;
+    if (ans === 'yes')           { aR=220; aG=38;  aB=38;  }
+    else if (ans === 'not_sure') { aR=217; aG=119; aB=6;   }
+    else                         { aR=22;  aG=163; aB=74;  }
+    const ansY = y + 3 + ((lines.length - 1) * 5.5) / 2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(aR, aG, aB);
+    doc.text(label, pageW - marginR - 18, ansY);
+
+    y += rowH;
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.3);
+    doc.line(marginL, y - 5, pageW - marginR, y - 5);
+  });
+
+  // ── Section: Risk factors ──
+  y += 4;
+  checkPage(10);
+  doc.setFontSize(9); doc.setTextColor(51, 65, 85); doc.setFont('helvetica', 'bold');
+  doc.text('STEP 2 — RISK FACTORS', marginL, y); y += 4;
+  doc.setFillColor(226, 232, 240);
+  doc.rect(marginL, y, contentW, 0.4, 'F');
+  y += 4;
+
+  doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'bold');
+  doc.text('Question', marginL, y);
+  doc.text('Answer', pageW - marginR - 18, y);
+  y += 3;
+  doc.setFillColor(226, 232, 240);
+  doc.rect(marginL, y, contentW, 0.3, 'F');
+  y += 4;
+
+  QUESTIONS.filter(q => q.group === 'risk').forEach(q => {
+    const ans   = answers[q.id] || 'no';
+    const label = ansLabel(ans);
+    const qText = `${q.id}. ${q.text}`;
+    const lines = doc.setFont('helvetica', 'normal').setFontSize(9)
+                     .splitTextToSize(qText, contentW - 25);
+    const rowH = lines.length * 5.5 + 9;
+    checkPage(rowH);
+
+    doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(lines, marginL, y + 3);
+
+    let aR, aG, aB;
+    if (ans === 'yes')           { aR=220; aG=38;  aB=38;  }
+    else if (ans === 'not_sure') { aR=217; aG=119; aB=6;   }
+    else                         { aR=22;  aG=163; aB=74;  }
+    const ansY = y + 3 + ((lines.length - 1) * 5.5) / 2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(aR, aG, aB);
+    doc.text(label, pageW - marginR - 18, ansY);
+
+    y += rowH;
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.3);
+    doc.line(marginL, y - 5, pageW - marginR, y - 5);
+  });
+
+  // ── Footer ──
+  checkPage(8);
+  y += 4;
+  doc.setFontSize(7); doc.setTextColor(148, 163, 184); doc.setFont('helvetica', 'normal');
+  doc.text('This record was generated automatically. Keep a copy on your project file. Contact your Privacy Officer for assistance.',
+    pageW / 2, y, { align: 'center' });
+
+  doc.save(`PIA-Threshold-Check-${projectName.replace(/[^a-z0-9]/gi, '-')}.pdf`);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+renderQuestions();
+</script>
+</body>
+</html>

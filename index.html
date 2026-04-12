@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy & Health Information Tools — Health Records Act 2001 (Vic)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: { colors: { primary: '#1e40af', 'primary-light': '#3b82f6' } } } }
+</script>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+<header class="bg-primary text-white shadow-lg">
+  <div class="max-w-5xl mx-auto px-6 py-6">
+    <h1 class="text-2xl font-bold">Your Privacy assistant</h1>
+    <p class="text-blue-200 text-sm mt-1">Australian Privacy Principles and Health Privacy Principles</p>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10">
+  <div class="text-center mb-10">
+    <h2 class="text-2xl font-bold text-slate-800">Choose the right tool for your project</h2>
+    <p class="text-slate-500 mt-2 text-sm">All tools save your progress automatically. You can come back and continue at any time.</p>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-6">
+
+    <!-- Card 1: Threshold Check -->
+    <div class="bg-white rounded-xl shadow border border-slate-200 flex flex-col overflow-hidden hover:shadow-md transition-shadow">
+      <div class="bg-teal-600 px-6 py-5 text-white">
+        <div class="text-4xl mb-2">☑️</div>
+        <h3 class="text-lg font-bold leading-tight">Do I Need a PIA?</h3>
+      </div>
+      <div class="px-6 py-5 flex-1 flex flex-col gap-4">
+        <p class="text-slate-600 text-sm flex-1">Not sure if your project needs a privacy assessment? Answer 10 quick yes/no questions to find out in about 5 minutes.</p>
+        <div>
+          <p class="text-xs text-slate-400 mb-3">⏱ About 5 minutes</p>
+          <a href="threshold.html" class="block text-center bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">Start Check →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Short-form PIA (Health Information) -->
+    <div class="bg-white rounded-xl shadow border border-slate-200 flex flex-col overflow-hidden hover:shadow-md transition-shadow">
+      <div class="bg-indigo-600 px-6 py-5 text-white">
+        <div class="text-4xl mb-2">🏥</div>
+        <h3 class="text-lg font-bold leading-tight">Short Privacy Assessment (Health Information)</h3>
+      </div>
+      <div class="px-6 py-5 flex-1 flex flex-col gap-4">
+        <p class="text-slate-600 text-sm flex-1">For lower-risk projects involving health information. Covers the key Health Privacy Principles under the Health Records Act 2001 (Vic). Produces a PDF report.</p>
+        <div>
+          <p class="text-xs text-slate-400 mb-3">⏱ About 10–20 minutes</p>
+          <a href="shortform.html" class="block text-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">Start Health Assessment →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Short-form PIA (Personal Information) -->
+    <div class="bg-white rounded-xl shadow border border-slate-200 flex flex-col overflow-hidden hover:shadow-md transition-shadow">
+      <div class="bg-emerald-600 px-6 py-5 text-white">
+        <div class="text-4xl mb-2">👤</div>
+        <h3 class="text-lg font-bold leading-tight">Short Privacy Assessment (Personal Information)</h3>
+      </div>
+      <div class="px-6 py-5 flex-1 flex flex-col gap-4">
+        <p class="text-slate-600 text-sm flex-1">For lower-risk projects involving personal information. Covers the Australian Privacy Principles (APPs) under the Privacy Act 1988 (Cth). Produces a PDF report.</p>
+        <div>
+          <p class="text-xs text-slate-400 mb-3">⏱ About 10–20 minutes</p>
+          <a href="shortform-personal.html" class="block text-center bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">Start Personal Assessment →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Full PIA -->
+    <div class="bg-white rounded-xl shadow border border-slate-200 flex flex-col overflow-hidden hover:shadow-md transition-shadow">
+      <div class="bg-primary px-6 py-5 text-white">
+        <div class="text-4xl mb-2">🛡️</div>
+        <h3 class="text-lg font-bold leading-tight">Full Privacy Impact Assessment</h3>
+      </div>
+      <div class="px-6 py-5 flex-1 flex flex-col gap-4">
+        <p class="text-slate-600 text-sm flex-1">For complex or high-risk projects. A detailed 20-step assessment covering all 11 Health Privacy Principles under the Health Records Act 2001 (Vic).</p>
+        <div>
+          <p class="text-xs text-slate-400 mb-3">⏱ About 30–40 minutes</p>
+          <a href="pia.html" class="block text-center bg-primary hover:bg-primary-light text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">Start Full PIA →</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Guidance box -->
+  <div class="mt-10 bg-blue-50 border border-blue-200 rounded-xl p-6">
+    <h4 class="font-semibold text-blue-800 mb-3">Which tool should I use?</h4>
+    <ul class="text-sm text-blue-700 space-y-2">
+      <li class="flex gap-2"><span class="text-blue-400">→</span><span>If you're <strong>not sure</strong> whether your project needs a privacy assessment, start with <strong>Do I Need a PIA?</strong></span></li>
+      <li class="flex gap-2"><span class="text-blue-400">→</span><span>If your project involves <strong>health information</strong> in a straightforward, lower-risk way, use the <strong>Short Privacy Assessment (Health Information)</strong> — aligned to the Health Records Act 2001 (Vic).</span></li>
+      <li class="flex gap-2"><span class="text-blue-400">→</span><span>If your project involves <strong>personal information</strong> (non-health), use the <strong>Short Privacy Assessment (Personal Information)</strong> — aligned to the Australian Privacy Principles.</span></li>
+      <li class="flex gap-2"><span class="text-blue-400">→</span><span>If your project is <strong>complex, high-risk</strong>, or involves large amounts of sensitive health information, complete the <strong>Full Privacy Impact Assessment</strong>.</span></li>
+    </ul>
+  </div>
+</main>
+
+<footer class="text-center text-xs text-slate-400 py-8 border-t mt-8">
+  The above does not constitute legal advice, and you should consult a legal representative if you are unsure.
+</footer>
+
+</body>
+</html>

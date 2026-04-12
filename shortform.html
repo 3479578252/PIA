@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Short Privacy Assessment (Health Information) — Health Records Act 2001 (Vic)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { primary: '#4338ca', 'primary-light': '#6366f1' } } }
+}
+</script>
+<style>
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .save-indicator { transition: opacity 0.3s ease; }
+  #report-preview-modal { display: none; }
+  #report-preview-modal.active { display: flex; }
+  .risk-card input[type=checkbox]:checked ~ .mit-section { display: block; }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+<!-- Header -->
+<header class="bg-primary text-white shadow-lg sticky top-0 z-40">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="text-indigo-200 hover:text-white text-sm flex-shrink-0">← Home</a>
+      <div>
+        <h1 class="text-base font-bold">Short Privacy Assessment (Health Information)</h1>
+        <p class="text-xs text-indigo-200">Health Records Act 2001 (Vic)</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="save-indicator" class="save-indicator text-xs text-indigo-200 opacity-0">Saved</span>
+      <button onclick="resetForm()" class="text-xs bg-indigo-800 hover:bg-indigo-700 px-3 py-1 rounded" title="Clear all data and start again">Reset</button>
+    </div>
+  </div>
+</header>
+
+<!-- Progress bar -->
+<div class="bg-white border-b shadow-sm sticky top-[52px] z-30">
+  <div class="max-w-3xl mx-auto px-4 py-2.5">
+    <div class="flex items-center justify-between mb-1.5">
+      <span class="text-xs text-slate-500" id="step-label">Step 1 of 8</span>
+      <span class="text-xs text-slate-400" id="step-name-label">About Your Project</span>
+    </div>
+    <div class="w-full bg-slate-200 rounded-full h-1.5">
+      <div id="progress-fill" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width:12.5%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Wizard container -->
+<main class="max-w-3xl mx-auto px-4 py-6">
+  <div id="wizard-container"></div>
+</main>
+
+<!-- Navigation -->
+<div class="sticky bottom-0 bg-white border-t shadow-lg z-30">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
+    <button id="btn-prev" onclick="prevStep()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors text-sm">Back</button>
+    <button id="btn-next" onclick="nextStep()" class="px-5 py-2 bg-primary hover:bg-primary-light text-white rounded-lg font-medium transition-colors text-sm">Next</button>
+  </div>
+</div>
+
+<!-- Report Preview Modal -->
+<div id="report-preview-modal" class="fixed inset-0 z-50 bg-black/50 flex-col">
+  <div class="bg-white flex items-center justify-between px-4 py-2 shadow">
+    <h2 class="font-bold">Report Preview</h2>
+    <div class="flex gap-2">
+      <button onclick="exportPDF()" class="px-4 py-1.5 bg-primary text-white rounded text-sm hover:bg-primary-light">Download PDF</button>
+      <button onclick="closePreview()" class="px-4 py-1.5 bg-slate-200 text-slate-700 rounded text-sm hover:bg-slate-300">Close</button>
+    </div>
+  </div>
+  <div class="flex-1 overflow-y-auto bg-slate-100 p-4">
+    <div class="max-w-[700px] mx-auto bg-white shadow-lg">
+      <div id="report-content" class="p-8"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay" class="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center" style="display:none;">
+  <div class="bg-white rounded-lg px-8 py-6 shadow-xl text-center">
+    <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+    <p class="text-slate-700">Generating PDF...</p>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const APP_KEY = 'shortform-pia-health-vic';
+
+const STEP_NAMES = [
+  'About Your Project',
+  'Health Information Involved',
+  'Purpose and Legal Basis',
+  'Who Has Access',
+  'Keeping Information Safe',
+  'Retention and Disposal',
+  'Privacy Risks',
+  'Actions and Sign-off'
+];
+
+const HEALTH_INFO_TYPES = [
+  'Patient demographics (name, address, date of birth)',
+  'Clinical records and consultation notes',
+  'Mental health records',
+  'Medication records and prescriptions',
+  'Pathology or test results',
+  'Imaging and scans (X-ray, MRI, ultrasound)',
+  'Allied health records (physiotherapy, occupational therapy, etc.)',
+  'Genetic or genomic information',
+  'Disability or functional impairment records',
+  'Aged care or residential care records',
+  'Staff health records',
+  'Financial or billing information',
+  'Other health information'
+];
+
+const SECURITY_CONTROLS = [
+  'Password protection',
+  'Only authorised staff can access health information (role-based access)',
+  'Data is encrypted (scrambled so only authorised users can read it)',
+  'Records are kept of who accessed information and when (audit logs)',
+  'Staff have completed privacy and security training',
+  'Physical security is in place (e.g. locked rooms, filing cabinets)',
+  'Regular security reviews or audits are conducted'
+];
+
+const RISK_ITEMS = [
+  { key: 'unauthorisedAccess', label: 'Unauthorised access to health information', example: 'Someone who shouldn\'t see the information is able to access it.', suggestions: [
+    'Implement role-based access controls (RBAC)',
+    'Require multi-factor authentication (MFA)',
+    'Conduct regular access reviews and remove unused accounts',
+    'Maintain audit logs of all access to health information',
+    'Apply the principle of least privilege'
+  ]},
+  { key: 'dataBreach', label: 'Data breach or cyber attack', example: 'Health information is hacked, leaked, or accidentally sent to the wrong person.', suggestions: [
+    'Encrypt health information at rest and in transit',
+    'Develop and test an incident response and data breach notification plan',
+    'Conduct regular vulnerability assessments and penetration testing',
+    'Implement intrusion detection and monitoring systems',
+    'Train staff on phishing and social engineering awareness'
+  ]},
+  { key: 'inaccurateData', label: 'Health information is incorrect or out of date', example: 'Patients receive wrong treatment because their records are inaccurate.', suggestions: [
+    'Implement data validation checks at point of entry',
+    'Provide patients with access to review and correct their records (HPP 6)',
+    'Schedule regular data quality audits',
+    'Establish a process for patients to request corrections',
+    'Cross-check information with source records where possible'
+  ]},
+  { key: 'sharingWithoutConsent', label: 'Health information is shared without consent', example: 'Patient records are disclosed to family members or others without permission.', suggestions: [
+    'Obtain and document informed consent before sharing (HPP 2)',
+    'Implement consent management workflows',
+    'Train staff on when consent is and is not required',
+    'Establish clear policies on permitted disclosures under HPP 2.2',
+    'Log all disclosures of health information'
+  ]},
+  { key: 'dataLoss', label: 'Loss or destruction of health information', example: 'Records are permanently lost due to hardware failure, fire, or no backup.', suggestions: [
+    'Implement automated daily backups with offsite storage',
+    'Test backup restoration procedures regularly',
+    'Use redundant storage systems',
+    'Develop a disaster recovery and business continuity plan',
+    'Ensure physical security of servers and storage media'
+  ]},
+  { key: 'wrongPurpose', label: 'Health information is used for a purpose patients don\'t expect', example: 'Clinical data is used for research or commercial purposes without patients knowing.', suggestions: [
+    'Document and communicate the primary purpose of collection clearly',
+    'Obtain separate consent for any secondary use (HPP 2)',
+    'Seek HREC approval for research use of health information',
+    'De-identify information where the original identity is not required',
+    'Review all new uses against HPP 2 permitted purposes before proceeding'
+  ]},
+  { key: 'noNotification', label: 'Patient not notified of collection or use of their health information', example: 'Patients are not told when their information is collected, what it will be used for, or who will have access — as required by HPP 2 of the Health Records Act.', suggestions: [
+    'Provide a privacy notice or collection statement at point of collection',
+    'Display privacy information in waiting areas and on websites',
+    'Include privacy information in patient registration forms',
+    'Train staff to explain how information will be used',
+    'Review and update privacy notices regularly'
+  ]},
+  { key: 'crossBorder', label: 'Health information transferred outside Victoria or overseas without adequate safeguards', example: 'Information is sent interstate or overseas without ensuring equivalent privacy protections are in place (HPP 9 — Transborder data flows).', suggestions: [
+    'Ensure receiving party is subject to equivalent privacy obligations (HPP 9)',
+    'Execute a data sharing or transfer agreement with privacy clauses',
+    'Obtain patient consent for cross-border transfers',
+    'Assess the privacy laws of the receiving jurisdiction',
+    'Use de-identified data where possible for interstate or overseas transfers'
+  ]}
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {};
+let saveTimeout = null;
+
+function getDefaultRiskItems() {
+  const items = {};
+  RISK_ITEMS.forEach(r => { items[r.key] = { checked: false, mitigation: '' }; });
+  items.other = { checked: false, description: '', mitigation: '' };
+  return items;
+}
+
+function getDefaultState() {
+  return {
+    currentStep: 0,
+    lastSaved: null,
+    project: { name: '', description: '', lead: '', organisation: '', date: new Date().toISOString().split('T')[0] },
+    healthInfo: { types: [], whose: '', numberOfPeople: '', collectionSource: '', otherDetails: '' },
+    purpose: { purpose: '', originalPurpose: 'yes', newPurpose: '', hpp2Basis: '', hpp2BasisOther: '', legalBasis: '', legalBasisOther: '', notification: '', notificationNote: '' },
+    access: { roles: [{ role: '', organisation: '', accessType: 'view' }], sharedOutside: 'no', sharedWith: '' },
+    security: { storedWhere: '', controls: [], securityResponsible: '', otherStorageDetails: '' },
+    retention: { period: '', disposalMethod: '', disposalAuthority: '' },
+    risks: { items: getDefaultRiskItems() },
+    actions: {
+      table: [{ risk: '', action: '', who: '', byWhen: '' }],
+      assessorName: '', assessorPosition: '', assessorDate: new Date().toISOString().split('T')[0],
+      assessorSignature: '', outcome: 'approved'
+    }
+  };
+}
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function saveState() {
+  state.lastSaved = new Date().toISOString();
+  localStorage.setItem(APP_KEY, JSON.stringify(state));
+  const ind = document.getElementById('save-indicator');
+  if (ind) {
+    const t = new Date(state.lastSaved);
+    ind.textContent = `Saved ${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}:${t.getSeconds().toString().padStart(2,'0')}`;
+    ind.style.opacity = '1';
+    setTimeout(() => { ind.style.opacity = '0'; }, 2000);
+  }
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(APP_KEY);
+    if (!saved) return null;
+    return JSON.parse(saved);
+  } catch { return null; }
+}
+
+function debounceSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(saveState, 500);
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setNestedValue(obj, path, value) {
+  const keys = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (cur[keys[i]] == null) cur[keys[i]] = {};
+    cur = cur[keys[i]];
+  }
+  cur[keys[keys.length - 1]] = value;
+}
+
+function getNestedValue(obj, path) {
+  return path.split('.').reduce((cur, k) => (cur == null ? '' : cur[k]), obj) ?? '';
+}
+
+// ============================================================
+// INPUT FIELD HELPERS
+// ============================================================
+const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
+const labelCls = 'block text-sm font-medium text-slate-700 mb-1';
+const tipCls = 'bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-5 text-sm text-indigo-700';
+const sectionHdg = 'text-base font-semibold text-slate-800 mt-6 mb-3';
+
+function field(id, label, type, opts = {}) {
+  const hint = opts.hint ? `<p class="text-xs text-slate-400 mt-1">${opts.hint}</p>` : '';
+  const req = opts.required ? ' <span class="text-red-500">*</span>' : '';
+  if (type === 'textarea') {
+    return `<div class="mb-4">
+      <label class="${labelCls}">${label}${req}</label>
+      <textarea id="${id}" data-bind="${opts.bind || id}" rows="${opts.rows || 3}" placeholder="${opts.placeholder || ''}" class="${inputCls} resize-y">${escapeHtml(getNestedValue(state, opts.bind || id))}</textarea>
+      ${hint}
+    </div>`;
+  }
+  if (type === 'select') {
+    const options = (opts.options || []).map(o => {
+      const val = typeof o === 'string' ? o : o.value;
+      const lbl = typeof o === 'string' ? o : o.label;
+      const sel = getNestedValue(state, opts.bind || id) === val ? 'selected' : '';
+      return `<option value="${escapeHtml(val)}" ${sel}>${escapeHtml(lbl)}</option>`;
+    }).join('');
+    return `<div class="mb-4">
+      <label class="${labelCls}">${label}${req}</label>
+      <select id="${id}" data-bind="${opts.bind || id}" class="${inputCls}">${options}</select>
+      ${hint}
+    </div>`;
+  }
+  const val = escapeHtml(getNestedValue(state, opts.bind || id));
+  return `<div class="mb-4">
+    <label class="${labelCls}">${label}${req}</label>
+    <input id="${id}" data-bind="${opts.bind || id}" type="${type}" value="${val}" placeholder="${opts.placeholder || ''}" class="${inputCls}">
+    ${hint}
+  </div>`;
+}
+
+// ============================================================
+// STEP BUILDERS
+// ============================================================
+function buildStep0() {
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">About Your Project</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us the basics about the project or activity involving health information.</p>
+    ${field('s0-name', 'Project name', 'text', { bind: 'project.name', required: true, placeholder: 'e.g. New patient management system' })}
+    ${field('s0-desc', 'What is this project about?', 'textarea', { bind: 'project.description', rows: 3, placeholder: 'Briefly describe what your project does and why. What problem does it solve?' })}
+    <div class="grid sm:grid-cols-2 gap-4">
+      ${field('s0-lead', 'Your name (project lead)', 'text', { bind: 'project.lead', placeholder: 'Full name' })}
+      ${field('s0-org', 'Organisation or team', 'text', { bind: 'project.organisation', placeholder: 'e.g. Royal Melbourne Hospital – Cardiology' })}
+    </div>
+    ${field('s0-date', 'Date of assessment', 'date', { bind: 'project.date' })}
+  `;
+}
+
+function buildStep1() {
+  const types = state.healthInfo.types || [];
+  const checkboxes = HEALTH_INFO_TYPES.map(t => `
+    <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded hover:bg-slate-50">
+      <input type="checkbox" data-array="healthInfo.types" data-value="${escapeHtml(t)}" ${types.includes(t) ? 'checked' : ''} class="mt-0.5 accent-indigo-600 w-4 h-4 flex-shrink-0">
+      <span class="text-sm text-slate-700">${escapeHtml(t)}</span>
+    </label>`).join('');
+
+  const whose = state.healthInfo.whose || [];
+  const whoOpts = [
+    { val: 'patients', label: 'Patients' },
+    { val: 'clients', label: 'Clients' },
+    { val: 'residents', label: 'Residents' },
+    { val: 'staff', label: 'Staff or employees' },
+    { val: 'volunteers', label: 'Volunteers' },
+    { val: 'carers', label: 'Carers or family members' },
+    { val: 'research', label: 'Research participants' },
+    { val: 'public', label: 'Members of the public' },
+    { val: 'other', label: 'Other' }
+  ];
+  const whoseCheckboxes = whoOpts.map(o => `
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" data-array="healthInfo.whose" data-value="${o.val}" ${whose.includes(o.val) ? 'checked' : ''} class="accent-indigo-600 w-4 h-4">
+      <span class="text-sm text-slate-700">${o.label}</span>
+    </label>`).join('');
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">What Health Information Is Involved?</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us what types of health information your project will collect, use, or store.</p>
+    <div class="mb-5">
+      <p class="${labelCls}">What types of health information are involved? <span class="text-red-500">*</span></p>
+      <p class="text-xs text-slate-400 mb-2">Tick all that apply.</p>
+      <div class="border border-slate-200 rounded-lg divide-y divide-slate-100">${checkboxes}</div>
+    </div>
+    <div class="mb-5">
+      <p class="${labelCls}">Whose health information is this? <span class="text-red-500">*</span></p>
+      <p class="text-xs text-slate-400 mb-2">Tick all that apply.</p>
+      <div class="flex flex-wrap gap-4 mt-1">${whoseCheckboxes}</div>
+    </div>
+    ${field('s1-num', 'Approximately how many people\'s information is involved?', 'text', { bind: 'healthInfo.numberOfPeople', placeholder: 'e.g. 500 patients, or approximately 2,000 per year' })}
+    <div class="mb-5">
+      <p class="${labelCls}">How will the health information be collected? <span class="text-slate-400 font-normal text-xs">(HPP 3)</span></p>
+      <p class="text-xs text-slate-400 mb-2">The Health Records Act requires collecting information directly from the individual wherever practicable.</p>
+      <div class="flex flex-col gap-2 mt-1">
+        ${[
+          { val: 'direct', label: 'Directly from the patient or individual' },
+          { val: 'third-party', label: 'From a third party (e.g. referring doctor, family member, another organisation)' },
+          { val: 'both', label: 'Both directly from the individual and from third parties' },
+          { val: 'existing', label: 'Using existing records already held by our organisation' }
+        ].map(o => `
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="collectionSource" value="${o.val}" ${(state.healthInfo.collectionSource||'') === o.val ? 'checked' : ''} class="accent-indigo-600 w-4 h-4">
+            <span class="text-sm text-slate-700">${o.label}</span>
+          </label>`).join('')}
+      </div>
+    </div>
+    ${field('s1-other', 'Any other details about the health information?', 'textarea', { bind: 'healthInfo.otherDetails', rows: 2, placeholder: 'Anything else we should know about the health information involved...' })}
+  `;
+}
+
+function buildStep2() {
+  const origPurp = state.purpose.originalPurpose || 'yes';
+  const showNew = origPurp !== 'yes';
+  const hpp2Basis = state.purpose.hpp2Basis || '';
+  const purpOpts = [
+    { val: 'yes', label: 'Yes — we will only use it for the purpose it was collected' },
+    { val: 'partly', label: 'Partly — we will also use it for a secondary purpose' },
+    { val: 'no', label: 'No — we intend to use it for a different purpose' }
+  ];
+  const radios = purpOpts.map(o => `
+    <label class="flex items-start gap-2 cursor-pointer">
+      <input type="radio" name="originalPurpose" value="${o.val}" ${origPurp === o.val ? 'checked' : ''} onchange="toggleNewPurpose(this.value)" class="mt-0.5 accent-indigo-600 w-4 h-4 flex-shrink-0">
+      <span class="text-sm text-slate-700">${o.label}</span>
+    </label>`).join('');
+
+  const hpp2Opts = [
+    { value: '', label: 'Select the applicable HPP 2 basis...' },
+    { value: 'HPP 2.2(a) — Necessary for the provision of a health service', label: 'HPP 2.2(a) — Necessary for the provision of a health service' },
+    { value: 'HPP 2.2(b) — The individual has consented to the secondary use or disclosure', label: 'HPP 2.2(b) — The individual has consented to the secondary use or disclosure' },
+    { value: 'HPP 2.2(c) — Required or authorised by or under law', label: 'HPP 2.2(c) — Required or authorised by or under law' },
+    { value: 'HPP 2.2(d) — Necessary to lessen or prevent a serious and imminent threat to health or safety', label: 'HPP 2.2(d) — Necessary to lessen or prevent a serious and imminent threat to health or safety' },
+    { value: 'HPP 2.2(g) — Necessary for research approved by a Human Research Ethics Committee (HREC)', label: 'HPP 2.2(g) — Necessary for research approved by a Human Research Ethics Committee (HREC)' },
+    { value: 'HPP 2.2(h) — Reasonably necessary for law enforcement or protection of public revenue', label: 'HPP 2.2(h) — Reasonably necessary for law enforcement or protection of public revenue' },
+    { value: 'Other', label: 'Other (describe below)' }
+  ];
+
+  const legalOpts = [
+    { value: '', label: 'Select the main reason...' },
+    { value: 'Direct patient care and treatment', label: 'HPP 1 — Direct patient care and treatment (primary purpose)' },
+    { value: 'Patient consent', label: 'HPP 2 — The patient has given their informed consent' },
+    { value: 'Secondary purpose — directly related', label: 'HPP 2 — Secondary purpose directly related to the primary purpose' },
+    { value: 'Legal requirement', label: 'HPP 2.2(h) — Legal requirement — required or authorised by or under law' },
+    { value: 'HREC-approved research', label: 'HPP 2.2(g) — Research approved by a Human Research Ethics Committee (HREC)' },
+    { value: 'Public health activity', label: 'HPP 2.2(d) — Public health or safety activity — necessary to lessen or prevent a serious threat' },
+    { value: 'Other', label: 'Other (describe below)' }
+  ];
+
+  const notifVal = state.purpose.notification || '';
+  const notifRadios = [
+    { val: 'yes', label: 'Yes — patients were notified at the time of collection' },
+    { val: 'implied', label: 'Implied — notification is inherent in the clinical relationship (primary care)' },
+    { val: 'no', label: 'No — patients were not notified' },
+    { val: 'planned', label: 'Not yet — we plan to notify them before collection begins' }
+  ].map(o => `
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="notification" value="${o.val}" ${notifVal === o.val ? 'checked' : ''} class="accent-indigo-600 w-4 h-4">
+      <span class="text-sm text-slate-700">${o.label}</span>
+    </label>`).join('');
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Purpose and Legal Basis</h2>
+    <p class="text-slate-500 text-sm mb-5">Explain why you are collecting or using this health information and what gives you the right to do so under the Health Records Act 2001 (Vic).</p>
+    ${field('s2-purpose', 'What will this health information be used for?', 'textarea', {
+      bind: 'purpose.purpose', rows: 3,
+      placeholder: 'Describe exactly what you will do with the health information. Be as specific as possible.'
+    })}
+    <div class="mb-5">
+      <p class="${labelCls}">Were patients or individuals notified of this collection? <span class="text-slate-400 font-normal text-xs">(HPP 2)</span></p>
+      <p class="text-xs text-slate-400 mb-2">The Health Records Act requires that individuals are told why their information is being collected and who will have access to it.</p>
+      <div class="flex flex-col gap-2 mt-1">${notifRadios}</div>
+    </div>
+    <div class="mb-4">
+      ${field('s2-notifnote', 'Any notes about notification (optional)', 'textarea', { bind: 'purpose.notificationNote', rows: 2, placeholder: 'e.g. Privacy notice provided at registration, or explain why notification was not required...' })}
+    </div>
+    <div class="mb-5">
+      <p class="${labelCls}">Will the health information be used for the same purpose it was collected for? <span class="text-slate-400 font-normal text-xs">(HPP 2)</span></p>
+      <div class="flex flex-col gap-2 mt-1">${radios}</div>
+    </div>
+    <div id="new-purpose-section" class="${showNew ? '' : 'hidden'} mb-4 pl-4 border-l-4 border-amber-300 bg-amber-50 rounded-r-lg py-3 pr-3">
+      <p class="text-xs font-semibold text-amber-700 mb-2">HPP 2 compliance required — secondary or different uses of health information must be permitted under HPP 2 of the Health Records Act 2001 (Vic).</p>
+      ${field('s2-newpurp', 'What is the secondary or different purpose?', 'textarea', {
+        bind: 'purpose.newPurpose', rows: 2,
+        placeholder: 'Explain what additional purpose you intend to use the health information for...'
+      })}
+      ${field('s2-hpp2basis', 'Under which HPP 2 provision is this secondary use or disclosure permitted? (HPP 2.2, Health Records Act 2001 (Vic))', 'select', {
+        bind: 'purpose.hpp2Basis', options: hpp2Opts
+      })}
+      <div id="hpp2-other-section" class="${hpp2Basis === 'Other' ? '' : 'hidden'} mt-2">
+        ${field('s2-hpp2other', 'Please describe the permitted basis', 'textarea', {
+          bind: 'purpose.hpp2BasisOther', rows: 2,
+          placeholder: 'Describe why this secondary use or disclosure is permitted under HPP 2...'
+        })}
+      </div>
+    </div>
+    <div id="legal-authority-section" class="${showNew ? 'hidden' : ''}">
+      ${field('s2-legal', 'What is your legal authority or reason for using this information?', 'select', {
+        bind: 'purpose.legalBasis', options: legalOpts
+      })}
+      <div id="legal-other-section" class="${state.purpose.legalBasis === 'Other' ? '' : 'hidden'}">
+        ${field('s2-legalnote', 'Please describe your legal basis', 'textarea', { bind: 'purpose.legalBasisOther', rows: 2 })}
+      </div>
+    </div>
+  `;
+}
+
+function buildStep3() {
+  const sharedOut = state.access.sharedOutside || 'no';
+  const sharedOpts = [
+    { val: 'no', label: 'No' },
+    { val: 'yes', label: 'Yes' }
+  ];
+  const sharedRadios = sharedOpts.map(o => `
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="sharedOutside" value="${o.val}" ${sharedOut === o.val ? 'checked' : ''} onchange="toggleSharedOutside(this.value)" class="accent-indigo-600 w-4 h-4">
+      <span class="text-sm text-slate-700">${o.label}</span>
+    </label>`).join('');
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Who Has Access?</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us which roles or positions can see or use the health information, and whether it will be shared outside your organisation.</p>
+    <div class="mb-5">
+      <p class="${labelCls}">Which roles or staff positions will have access to the health information?</p>
+      <p class="text-xs text-slate-400 mb-2">List every role that can view or use the information — not individual names.</p>
+      <div id="roles-table-container"></div>
+      <button onclick="addRole()" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">+ Add another role</button>
+    </div>
+    <div class="mb-4">
+      <p class="${labelCls}">Will health information be shared outside your organisation?</p>
+      <div class="flex gap-6 mt-1">${sharedRadios}</div>
+    </div>
+    <div id="shared-with-section" class="${sharedOut === 'yes' ? '' : 'hidden'}">
+      ${field('s3-sharedwith', 'Who will it be shared with, and why?', 'textarea', {
+        bind: 'access.sharedWith', rows: 2,
+        placeholder: 'e.g. Shared with Pathology Lab X for processing test results under a data sharing agreement.'
+      })}
+    </div>
+  `;
+}
+
+function buildStep4() {
+  const controls = state.security.controls || [];
+  const checkboxes = SECURITY_CONTROLS.map(c => `
+    <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded hover:bg-slate-50">
+      <input type="checkbox" data-array="security.controls" data-value="${escapeHtml(c)}" ${controls.includes(c) ? 'checked' : ''} class="mt-0.5 accent-indigo-600 w-4 h-4 flex-shrink-0">
+      <span class="text-sm text-slate-700">${escapeHtml(c)}</span>
+    </label>`).join('');
+
+  const storageOpts = [
+    { value: '', label: 'Select where information will be stored...' },
+    { value: 'Hospital or clinic computer system', label: 'Hospital or clinic computer system (on-site)' },
+    { value: 'Cloud-based system or service', label: 'Cloud-based system or online service' },
+    { value: 'Paper records', label: 'Paper records only' },
+    { value: 'Both electronic and paper', label: 'Both electronic systems and paper records' },
+    { value: 'External drive or USB', label: 'External hard drive or USB' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Keeping Information Safe</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us how you will protect the health information from being accessed, lost, or misused.</p>
+    ${field('s4-stored', 'Where will the health information be stored?', 'select', {
+      bind: 'security.storedWhere', options: storageOpts
+    })}
+    <div id="s4-other-section" class="${state.security.storedWhere === 'Other' ? '' : 'hidden'}">
+      ${field('s4-otherdetail', 'Please describe where it will be stored', 'text', { bind: 'security.otherStorageDetails', placeholder: '' })}
+    </div>
+    <div class="mb-5">
+      <p class="${labelCls}">What security measures are already in place? <span class="text-red-500">*</span></p>
+      <p class="text-xs text-slate-400 mb-2">Tick all that apply to your project.</p>
+      <div class="border border-slate-200 rounded-lg divide-y divide-slate-100">${checkboxes}</div>
+    </div>
+    ${field('s4-responsible', 'Who is responsible for keeping this information safe?', 'text', {
+      bind: 'security.securityResponsible',
+      placeholder: 'e.g. ICT Security Manager — John Smith',
+      hint: 'Provide a role or name of the person accountable for information security on this project.'
+    })}
+  `;
+}
+
+function buildStep5() {
+  const disposalOpts = [
+    { value: '', label: 'Select a disposal method...' },
+    { value: 'Secure electronic deletion', label: 'Secure electronic deletion (permanently deleted from all systems)' },
+    { value: 'Professional shredding', label: 'Professional shredding (for paper records)' },
+    { value: 'De-identification', label: 'De-identification (removing names and identifying details)' },
+    { value: 'Return to patient or source', label: 'Return to the patient or the source organisation' },
+    { value: 'Transfer to archive', label: 'Transfer to a government archive or approved repository' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Keeping and Disposing of Information</h2>
+    <p class="text-slate-500 text-sm mb-5">Under the Health Records Act, health information must be kept only as long as needed and then disposed of securely.</p>
+    ${field('s5-period', 'How long will you keep the health information?', 'text', {
+      bind: 'retention.period',
+      placeholder: 'e.g. 7 years after last patient contact, or as required by law',
+      hint: 'Check with your Records Manager or Privacy Officer if you are unsure.'
+    })}
+    ${field('s5-disposal', 'How will you dispose of the information when it is no longer needed?', 'select', {
+      bind: 'retention.disposalMethod', options: disposalOpts
+    })}
+    ${field('s5-authority', 'What policy or rule tells you how long to keep it?', 'text', {
+      bind: 'retention.disposalAuthority',
+      placeholder: 'e.g. Public Records Act 1973, Vic Health Retention Schedule',
+      hint: 'This might be a law, a departmental policy, or your organisation\'s records retention schedule.'
+    })}
+  `;
+}
+
+function buildStep6() {
+  const items = state.risks.items || {};
+  const riskCards = RISK_ITEMS.map(r => {
+    const checked = items[r.key]?.checked || false;
+    const mit = escapeHtml(items[r.key]?.mitigation || '');
+    return `
+      <div class="border border-slate-200 rounded-lg overflow-hidden risk-card" id="rcard-${r.key}">
+        <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-slate-50 select-none">
+          <input type="checkbox" id="risk-${r.key}" ${checked ? 'checked' : ''} onchange="toggleRisk('${r.key}')" class="mt-0.5 accent-indigo-600 w-4 h-4 flex-shrink-0">
+          <div>
+            <p class="font-medium text-slate-800 text-sm leading-snug">${escapeHtml(r.label)}</p>
+            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(r.example)}</p>
+          </div>
+        </label>
+        <div id="mit-${r.key}" class="${checked ? '' : 'hidden'} bg-indigo-50 px-4 pb-4">
+          <label class="block text-sm font-medium text-indigo-700 mb-1">What will you do to manage this risk?</label>
+          <p class="text-xs text-indigo-400 mb-2">Click suggestions to add them, or type your own response.</p>
+          <div class="flex flex-wrap gap-1.5 mb-2">${(r.suggestions || []).map(s => `<button type="button" onclick="addSuggestion('${r.key}', this)" class="text-xs bg-white border border-indigo-200 text-indigo-700 px-2 py-1 rounded-full hover:bg-indigo-100 hover:border-indigo-300 transition-colors cursor-pointer">${escapeHtml(s)}</button>`).join('')}</div>
+          <textarea id="mitigation-${r.key}" rows="2" placeholder="Describe the steps you will take to prevent or reduce this risk..." class="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-y">${mit}</textarea>
+        </div>
+      </div>`;
+  }).join('');
+
+  const otherChecked = items.other?.checked || false;
+  const otherDesc = escapeHtml(items.other?.description || '');
+  const otherMit = escapeHtml(items.other?.mitigation || '');
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Are There Any Privacy Risks?</h2>
+    <p class="text-slate-500 text-sm mb-2">Tick any risks that could happen in your project. For each risk you tick, briefly describe what you will do about it.</p>
+    <p class="text-xs text-slate-400 mb-5">It is okay if none of these apply — just leave them all unticked.</p>
+    <div class="space-y-3">
+      ${riskCards}
+      <div class="border border-slate-200 rounded-lg overflow-hidden" id="rcard-other">
+        <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-slate-50 select-none">
+          <input type="checkbox" id="risk-other" ${otherChecked ? 'checked' : ''} onchange="toggleRisk('other')" class="mt-0.5 accent-indigo-600 w-4 h-4 flex-shrink-0">
+          <div>
+            <p class="font-medium text-slate-800 text-sm">Other privacy risk not listed above</p>
+          </div>
+        </label>
+        <div id="mit-other" class="${otherChecked ? '' : 'hidden'} bg-indigo-50 px-4 pb-4">
+          <div class="mb-2">
+            <label class="block text-sm font-medium text-indigo-700 mb-1">Describe the risk</label>
+            <input id="risk-other-desc" type="text" value="${otherDesc}" placeholder="What is the risk?" class="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-indigo-700 mb-1">What will you do to manage this risk?</label>
+            <textarea id="risk-other-mit" rows="2" placeholder="Describe the steps you will take..." class="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-y">${otherMit}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildStep7() {
+  const act = state.actions;
+  const outcomeOpts = [
+    { value: 'approved', label: 'Assessment complete — approved to proceed' },
+    { value: 'approved-conditions', label: 'Assessment complete — approved to proceed with conditions' },
+    { value: 'further-review', label: 'Further review or consultation needed' },
+    { value: 'not-approved', label: 'Not approved to proceed' }
+  ];
+  const outcomeSelect = outcomeOpts.map(o =>
+    `<option value="${o.value}" ${act.outcome === o.value ? 'selected' : ''}>${o.label}</option>`
+  ).join('');
+
+  const identifiedRisks = RISK_ITEMS.filter(r => state.risks.items[r.key]?.checked).length +
+    (state.risks.items.other?.checked ? 1 : 0);
+  const riskSummary = identifiedRisks === 0
+    ? '<p class="text-sm text-slate-500 italic">No risks were identified in the previous step.</p>'
+    : `<p class="text-sm text-slate-600">You identified <strong>${identifiedRisks} risk${identifiedRisks !== 1 ? 's' : ''}</strong> in the previous step. Use the table below to record your actions, or click <strong>Pre-fill from risks</strong> to import them automatically.</p>`;
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Actions and Sign-off</h2>
+    <p class="text-slate-500 text-sm mb-5">Record any actions you will take to address the privacy risks, then sign off on the assessment.</p>
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <p class="${labelCls} mb-0">Actions to address privacy risks</p>
+        <button onclick="prePopulateActions()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-300 px-2 py-1 rounded">Pre-fill from risks</button>
+      </div>
+      ${riskSummary}
+      <div id="actions-table-container" class="mt-3"></div>
+      <button onclick="addAction()" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">+ Add action</button>
+    </div>
+    <div class="border-t pt-5 mt-5">
+      <h3 class="text-base font-semibold text-slate-800 mb-3">Sign-off</h3>
+      <div class="grid sm:grid-cols-2 gap-4">
+        ${field('s7-name', 'Your full name', 'text', { bind: 'actions.assessorName', placeholder: 'Full name' })}
+        ${field('s7-pos', 'Your position or role', 'text', { bind: 'actions.assessorPosition', placeholder: 'e.g. Privacy Officer' })}
+      </div>
+      ${field('s7-date', 'Date', 'date', { bind: 'actions.assessorDate' })}
+      ${field('s7-sig', 'Signature (type your full name as your electronic signature)', 'text', {
+        bind: 'actions.assessorSignature',
+        placeholder: 'Type your full name',
+        hint: 'By typing your name you confirm this assessment is complete and accurate to the best of your knowledge.'
+      })}
+      <div class="mb-4">
+        <label class="${labelCls}">Assessment outcome</label>
+        <select id="s7-outcome" data-bind="actions.outcome" class="${inputCls}">
+          ${outcomeSelect}
+        </select>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-3 mt-6 pt-5 border-t">
+      <button onclick="showPreview()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition-colors">Preview Report</button>
+      <button onclick="exportPDF()" class="px-5 py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg text-sm font-semibold transition-colors">Download PDF</button>
+      <button onclick="exportJSON()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition-colors">Export data</button>
+    </div>
+  `;
+}
+
+// ============================================================
+// WIZARD INIT & NAVIGATION
+// ============================================================
+const STEP_BUILDERS = [buildStep0, buildStep1, buildStep2, buildStep3, buildStep4, buildStep5, buildStep6, buildStep7];
+
+function buildWizardSteps() {
+  const container = document.getElementById('wizard-container');
+  container.innerHTML = STEP_BUILDERS.map((fn, i) =>
+    `<div class="wizard-step ${i === 0 ? 'active' : ''}" id="step-${i}"></div>`
+  ).join('');
+}
+
+function renderStep(index) {
+  const el = document.getElementById(`step-${index}`);
+  if (!el) return;
+  el.innerHTML = STEP_BUILDERS[index]();
+  // Re-render dynamic tables
+  if (index === 3) renderRolesTable();
+  if (index === 7) renderActionsTable();
+  // Attach debounce save to all inputs/textareas/selects in this step
+  el.querySelectorAll('input, textarea, select').forEach(inp => {
+    inp.addEventListener('input', debounceSave);
+    inp.addEventListener('change', debounceSave);
+  });
+}
+
+function navigateTo(stepIndex) {
+  if (stepIndex < 0 || stepIndex >= STEP_BUILDERS.length) return;
+  collectCurrentStepData();
+  saveState();
+
+  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+  state.currentStep = stepIndex;
+
+  // Re-render the target step so values are fresh
+  renderStep(stepIndex);
+  document.getElementById(`step-${stepIndex}`).classList.add('active');
+
+  updateProgressBar(stepIndex);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  document.getElementById('btn-prev').style.visibility = stepIndex === 0 ? 'hidden' : 'visible';
+  const isLast = stepIndex === STEP_BUILDERS.length - 1;
+  document.getElementById('btn-next').style.display = isLast ? 'none' : 'inline-flex';
+}
+
+function nextStep() { navigateTo(state.currentStep + 1); }
+function prevStep() { navigateTo(state.currentStep - 1); }
+
+function updateProgressBar(step) {
+  const pct = ((step + 1) / STEP_BUILDERS.length * 100).toFixed(1);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('step-label').textContent = `Step ${step + 1} of ${STEP_BUILDERS.length}`;
+  document.getElementById('step-name-label').textContent = STEP_NAMES[step];
+}
+
+// ============================================================
+// DATA COLLECTION
+// ============================================================
+function collectCurrentStepData() {
+  const step = state.currentStep;
+  const el = document.getElementById(`step-${step}`);
+  if (!el) return;
+
+  // Simple data-bind inputs
+  el.querySelectorAll('[data-bind]').forEach(input => {
+    setNestedValue(state, input.dataset.bind, input.value);
+  });
+
+  // Checkbox arrays (data-array)
+  const arrayPaths = new Set(Array.from(el.querySelectorAll('[data-array]')).map(e => e.dataset.array));
+  arrayPaths.forEach(path => {
+    const arr = [];
+    el.querySelectorAll(`[data-array="${path}"]:checked`).forEach(cb => arr.push(cb.dataset.value));
+    setNestedValue(state, path, arr);
+  });
+
+  // Radio buttons
+  el.querySelectorAll('input[type=radio]:checked').forEach(r => {
+    if (r.name === 'collectionSource') state.healthInfo.collectionSource = r.value;
+    if (r.name === 'originalPurpose') state.purpose.originalPurpose = r.value;
+    if (r.name === 'notification') state.purpose.notification = r.value;
+    // Capture HPP 2 basis select
+    const hpp2Select = document.querySelector('select[data-bind="purpose.hpp2Basis"]');
+    if (hpp2Select) {
+      state.purpose.hpp2Basis = hpp2Select.value;
+      const hpp2Other = document.getElementById('hpp2-other-section');
+      if (hpp2Other) hpp2Other.classList.toggle('hidden', hpp2Select.value !== 'Other');
+    }
+    if (r.name === 'sharedOutside') state.access.sharedOutside = r.value;
+  });
+
+  // Step 6: risks
+  if (step === 6) {
+    if (!state.risks.items) state.risks.items = getDefaultRiskItems();
+    RISK_ITEMS.forEach(r => {
+      const cb = document.getElementById(`risk-${r.key}`);
+      const mit = document.getElementById(`mitigation-${r.key}`);
+      if (cb) state.risks.items[r.key] = { checked: cb.checked, mitigation: mit ? mit.value : '' };
+    });
+    const otherCb = document.getElementById('risk-other');
+    const otherDesc = document.getElementById('risk-other-desc');
+    const otherMit = document.getElementById('risk-other-mit');
+    if (otherCb) state.risks.items.other = {
+      checked: otherCb.checked,
+      description: otherDesc ? otherDesc.value : '',
+      mitigation: otherMit ? otherMit.value : ''
+    };
+  }
+}
+
+// ============================================================
+// STEP-SPECIFIC INTERACTIONS
+// ============================================================
+function toggleNewPurpose(val) {
+  const newPurp = document.getElementById('new-purpose-section');
+  if (newPurp) newPurp.classList.toggle('hidden', val === 'yes');
+  const legalAuth = document.getElementById('legal-authority-section');
+  if (legalAuth) legalAuth.classList.toggle('hidden', val !== 'yes');
+}
+
+function toggleSharedOutside(val) {
+  const el = document.getElementById('shared-with-section');
+  if (el) el.classList.toggle('hidden', val !== 'yes');
+}
+
+function toggleRisk(key) {
+  const cb = document.getElementById(`risk-${key}`);
+  const mit = document.getElementById(`mit-${key}`);
+  if (mit && cb) mit.classList.toggle('hidden', !cb.checked);
+}
+
+function addSuggestion(key, btn) {
+  const ta = document.getElementById(`mitigation-${key}`);
+  if (!ta) return;
+  const text = btn.textContent.trim();
+  const current = ta.value.trim();
+  if (current.includes(text)) return;
+  ta.value = current ? current + '\n' + text : text;
+  btn.classList.remove('bg-white', 'text-indigo-700', 'border-indigo-200');
+  btn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600');
+  btn.disabled = true;
+}
+
+// ============================================================
+// DYNAMIC TABLES
+// ============================================================
+function renderRolesTable() {
+  const container = document.getElementById('roles-table-container');
+  if (!container) return;
+  const rows = state.access.roles || [];
+  container.innerHTML = `
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border-collapse border border-slate-200 rounded-lg overflow-hidden">
+        <thead>
+          <tr class="bg-slate-100 text-left">
+            <th class="border border-slate-200 px-3 py-2 font-medium">Role / Position</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">Organisation</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">Level of access</th>
+            <th class="border border-slate-200 px-3 py-2 w-10"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, i) => `
+            <tr>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.role)}" placeholder="e.g. Treating Clinician" onchange="state.access.roles[${i}].role=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.organisation)}" placeholder="e.g. Royal Melbourne Hospital" onchange="state.access.roles[${i}].organisation=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1">
+                <select class="w-full px-2 py-1 text-sm outline-none bg-transparent" onchange="state.access.roles[${i}].accessType=this.value;saveState()">
+                  <option value="view" ${row.accessType==='view'?'selected':''}>View only</option>
+                  <option value="edit" ${row.accessType==='edit'?'selected':''}>View and edit</option>
+                  <option value="full" ${row.accessType==='full'?'selected':''}>Full access</option>
+                </select>
+              </td>
+              <td class="border border-slate-200 p-1 text-center">
+                <button onclick="removeRole(${i})" class="text-red-400 hover:text-red-600 text-lg leading-none" ${rows.length===1?'disabled title="Need at least one row"':''}>✕</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function addRole() {
+  collectCurrentStepData();
+  state.access.roles.push({ role: '', organisation: '', accessType: 'view' });
+  renderRolesTable();
+  saveState();
+}
+
+function removeRole(i) {
+  if (state.access.roles.length > 1) {
+    collectCurrentStepData();
+    state.access.roles.splice(i, 1);
+    renderRolesTable();
+    saveState();
+  }
+}
+
+function renderActionsTable() {
+  const container = document.getElementById('actions-table-container');
+  if (!container) return;
+  const rows = state.actions.table || [];
+  container.innerHTML = `
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border-collapse border border-slate-200 rounded-lg overflow-hidden">
+        <thead>
+          <tr class="bg-slate-100 text-left">
+            <th class="border border-slate-200 px-3 py-2 font-medium">Risk</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">What will you do?</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">Who is responsible?</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">By when?</th>
+            <th class="border border-slate-200 px-3 py-2 w-10"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, i) => `
+            <tr>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.risk)}" placeholder="Risk description" onchange="state.actions.table[${i}].risk=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.action)}" placeholder="Action to take" onchange="state.actions.table[${i}].action=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.who)}" placeholder="Name / role" onchange="state.actions.table[${i}].who=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input type="date" class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.byWhen)}" onchange="state.actions.table[${i}].byWhen=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1 text-center">
+                <button onclick="removeAction(${i})" class="text-red-400 hover:text-red-600 text-lg leading-none" ${rows.length===1?'disabled':''}>✕</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function addAction() {
+  collectCurrentStepData();
+  state.actions.table.push({ risk: '', action: '', who: '', byWhen: '' });
+  renderActionsTable();
+  saveState();
+}
+
+function removeAction(i) {
+  if (state.actions.table.length > 1) {
+    collectCurrentStepData();
+    state.actions.table.splice(i, 1);
+    renderActionsTable();
+    saveState();
+  }
+}
+
+function prePopulateActions() {
+  collectCurrentStepData();
+  const table = [];
+  RISK_ITEMS.forEach(r => {
+    if (state.risks.items[r.key]?.checked) {
+      table.push({ risk: r.label, action: state.risks.items[r.key].mitigation || '', who: '', byWhen: '' });
+    }
+  });
+  if (state.risks.items.other?.checked) {
+    table.push({ risk: state.risks.items.other.description || 'Other risk', action: state.risks.items.other.mitigation || '', who: '', byWhen: '' });
+  }
+  if (table.length === 0) {
+    alert('No risks were ticked in the previous step. Go back to Step 7 and tick the risks that apply first.');
+    return;
+  }
+  state.actions.table = table;
+  renderActionsTable();
+  saveState();
+}
+
+// ============================================================
+// REPORT / PDF
+// ============================================================
+function generateReportHTML() {
+  const p = state.project;
+  const hi = state.healthInfo;
+  const pu = state.purpose;
+  const ac = state.access;
+  const sec = state.security;
+  const ret = state.retention;
+  const risks = state.risks.items || {};
+  const act = state.actions;
+
+  const esc = s => escapeHtml(s);
+  const val = (v, fallback) => esc(v) || `<em style="color:#94a3b8">${fallback || 'Not provided'}</em>`;
+
+  const section = (num, title, content) => `
+    <div style="margin-bottom:28px;">
+      <h2 style="font-size:13px;font-weight:700;color:#4338ca;border-bottom:2px solid #c7d2fe;padding-bottom:5px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.04em;">${num}. ${title}</h2>
+      ${content}
+    </div>`;
+
+  const row = (label, value) => `
+    <div style="display:flex;gap:12px;margin-bottom:7px;">
+      <span style="font-size:11px;color:#64748b;min-width:160px;flex-shrink:0;">${label}</span>
+      <span style="font-size:12px;color:#1e293b;">${val(value)}</span>
+    </div>`;
+
+  const typesList = (hi.types || []).length
+    ? (hi.types || []).map(t => `<li style="font-size:12px;margin-bottom:2px;">${esc(t)}</li>`).join('')
+    : `<li style="font-size:12px;color:#94a3b8;">None specified</li>`;
+
+  const controlsList = (sec.controls || []).length
+    ? (sec.controls || []).map(c => `<li style="font-size:12px;margin-bottom:2px;">${esc(c)}</li>`).join('')
+    : `<li style="font-size:12px;color:#94a3b8;">None selected</li>`;
+
+  const whoseMap = { patients:'Patients', clients:'Clients', residents:'Residents', staff:'Staff or employees', volunteers:'Volunteers', carers:'Carers or family members', research:'Research participants', public:'Members of the public', other:'Other' };
+  const whoseLabel = (hi.whose || []).map(w => whoseMap[w] || w).join(', ') || 'Not specified';
+  const accessLabel = { view:'View only', edit:'View and edit', full:'Full access' };
+  const origPurpLabel = { yes:'Yes', partly:'Partly', no:'No' }[pu.originalPurpose] || pu.originalPurpose;
+
+  const rolesRows = (ac.roles || []).filter(r => r.role).map(r => `
+    <tr>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(r.role)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(r.organisation)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${accessLabel[r.accessType] || r.accessType}</td>
+    </tr>`).join('');
+
+  const riskRows = RISK_ITEMS.filter(r => risks[r.key]?.checked).map(r => `
+    <div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin-bottom:7px;">
+      <p style="font-weight:600;font-size:12px;margin-bottom:3px;">${esc(r.label)}</p>
+      <p style="font-size:11px;color:#64748b;">Action: ${val(risks[r.key]?.mitigation, 'No mitigation specified')}</p>
+    </div>`).join('');
+
+  const otherRisk = risks.other?.checked ? `
+    <div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin-bottom:7px;">
+      <p style="font-weight:600;font-size:12px;margin-bottom:3px;">${val(risks.other.description, 'Other risk')}</p>
+      <p style="font-size:11px;color:#64748b;">Action: ${val(risks.other.mitigation, 'No mitigation specified')}</p>
+    </div>` : '';
+
+  const actionsRows = (act.table || []).filter(a => a.risk || a.action).map(a => `
+    <tr>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.risk)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.action)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.who)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.byWhen)}</td>
+    </tr>`).join('');
+
+  const outcomeLabels = {
+    'approved': 'Assessment complete — approved to proceed',
+    'approved-conditions': 'Assessment complete — approved with conditions',
+    'further-review': 'Further review or consultation needed',
+    'not-approved': 'Not approved to proceed'
+  };
+
+  return `<div style="font-family:Arial,sans-serif;color:#1e293b;max-width:700px;margin:0 auto;">
+    <div style="text-align:center;padding:32px 0 24px;border-bottom:3px solid #4338ca;margin-bottom:28px;">
+      <p style="font-size:11px;color:#64748b;margin:0 0 6px;">Health Records Act 2001 (Vic)</p>
+      <h1 style="font-size:22px;font-weight:700;color:#4338ca;margin:0 0 10px;">Short Privacy Assessment (Health Information)</h1>
+      <p style="font-size:17px;font-weight:600;margin:0 0 6px;">${val(p.name, 'Untitled Project')}</p>
+      <p style="font-size:12px;color:#64748b;margin:0;">${esc(p.organisation)}${p.organisation && p.date ? ' &nbsp;|&nbsp; ' : ''}${esc(p.date)}</p>
+      <p style="font-size:12px;color:#64748b;margin:4px 0 0;">Prepared by: ${esc(p.lead)}</p>
+    </div>
+
+    ${section(1, 'About the Project', `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;">
+        ${row('Project name', p.name)}
+        ${row('Project lead', p.lead)}
+        ${row('Organisation / team', p.organisation)}
+        ${row('Date of assessment', p.date)}
+      </div>
+      <div style="margin-top:8px;">${row('Description', p.description)}</div>
+    `)}
+
+    ${section(2, 'Health Information Involved', `
+      <p style="font-size:11px;color:#64748b;margin-bottom:4px;">Types of health information:</p>
+      <ul style="margin:0 0 10px 16px;">${typesList}</ul>
+      ${row('Whose information', whoseLabel)}
+      ${row('Approximate number of people', hi.numberOfPeople)}
+      ${row('How information is collected (HPP 3)', { direct:'Directly from the patient', 'third-party':'From a third party', both:'Both directly and from third parties', existing:'Using existing records' }[hi.collectionSource] || hi.collectionSource)}
+      ${hi.otherDetails ? row('Other details', hi.otherDetails) : ''}
+    `)}
+
+    ${section(3, 'Purpose and Legal Basis', `
+      ${row('Purpose', pu.purpose)}
+      ${row('Patient notification (HPP 2)', { yes:'Yes — notified at time of collection', implied:'Implied — inherent in clinical relationship', no:'No — not notified', planned:'Planned — will notify before collection' }[pu.notification] || pu.notification)}
+      ${pu.notificationNote ? row('Notification notes', pu.notificationNote) : ''}
+      ${row('Used for original purpose? (HPP 2)', origPurpLabel)}
+      ${pu.originalPurpose === 'yes' ? row('Legal authority', {
+        'Direct patient care and treatment':'HPP 1 — Direct patient care and treatment (primary purpose)',
+        'Patient consent':'HPP 2 — The patient has given their informed consent',
+        'Secondary purpose — directly related':'HPP 2 — Secondary purpose directly related to the primary purpose',
+        'Legal requirement':'HPP 2.2(h) — Legal requirement — required or authorised by or under law',
+        'HREC-approved research':'HPP 2.2(g) — Research approved by a Human Research Ethics Committee (HREC)',
+        'Public health activity':'HPP 2.2(d) — Public health or safety activity — necessary to lessen or prevent a serious threat'
+      }[pu.legalBasis] || pu.legalBasis) : ''}
+      ${pu.originalPurpose !== 'yes' ? row('Secondary/different purpose', pu.newPurpose) : ''}
+      ${pu.originalPurpose !== 'yes' && pu.hpp2Basis ? row('HPP 2 basis for secondary use', pu.hpp2Basis) : ''}
+      ${pu.originalPurpose !== 'yes' && pu.hpp2Basis === 'Other' && pu.hpp2BasisOther ? row('HPP 2 basis (detail)', pu.hpp2BasisOther) : ''}
+    `)}
+
+    ${section(4, 'Access and Sharing', `
+      <p style="font-size:11px;color:#64748b;margin-bottom:5px;">Roles with access:</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+        <thead><tr style="background:#f8fafc;">
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Role / Position</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Organisation</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Access level</th>
+        </tr></thead>
+        <tbody>${rolesRows || '<tr><td colspan="3" style="padding:8px;text-align:center;color:#94a3b8;font-size:11px;">No roles listed</td></tr>'}</tbody>
+      </table>
+      ${row('Shared outside organisation?', ac.sharedOutside === 'yes' ? 'Yes' : 'No')}
+      ${ac.sharedOutside === 'yes' ? row('Shared with', ac.sharedWith) : ''}
+    `)}
+
+    ${section(5, 'Security Measures', `
+      ${row('Where information is stored', sec.storedWhere)}
+      <p style="font-size:11px;color:#64748b;margin:8px 0 4px;">Security controls in place:</p>
+      <ul style="margin:0 0 8px 16px;">${controlsList}</ul>
+      ${row('Person responsible for security', sec.securityResponsible)}
+    `)}
+
+    ${section(6, 'Retention and Disposal', `
+      ${row('How long will information be kept?', ret.period)}
+      ${row('Disposal method', ret.disposalMethod)}
+      ${row('Retention policy / authority', ret.disposalAuthority)}
+    `)}
+
+    ${section(7, 'Privacy Risks and Mitigations', `
+      ${riskRows || '<p style="font-size:12px;color:#94a3b8;font-style:italic;">No risks identified.</p>'}
+      ${otherRisk}
+    `)}
+
+    ${section(8, 'Actions', `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;">
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Risk</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Action</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Who</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">By when</th>
+        </tr></thead>
+        <tbody>${actionsRows || '<tr><td colspan="4" style="padding:8px;text-align:center;color:#94a3b8;font-size:11px;">No actions listed</td></tr>'}</tbody>
+      </table>
+    `)}
+
+    ${section(9, 'Sign-off', `
+      ${row('Outcome', outcomeLabels[act.outcome] || act.outcome)}
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;width:50%;"><strong>Assessor</strong></td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;width:50%;"></td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Name</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(act.assessorName)}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Position</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(act.assessorPosition)}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Date</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(act.assessorDate)}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Signature</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-style:italic;">${esc(act.assessorSignature)}</td></tr>
+      </table>
+    `)}
+  </div>`;
+}
+
+function showPreview() {
+  collectCurrentStepData();
+  saveState();
+  document.getElementById('report-content').innerHTML = generateReportHTML();
+  document.getElementById('report-preview-modal').classList.add('active');
+}
+
+function closePreview() {
+  document.getElementById('report-preview-modal').classList.remove('active');
+}
+
+function exportPDF() {
+  collectCurrentStepData();
+  saveState();
+  closePreview();
+  const html = generateReportHTML();
+  const projectName = state.project.name || 'Short-PIA';
+
+  // Insert report element at top of DOM so html2canvas captures from y=0
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  el.style.cssText = 'position:relative;width:794px;margin:0;padding:0;background:white;';
+  document.body.insertBefore(el, document.body.firstChild);
+
+  // Scroll to top so the element is within the viewport before capture
+  window.scrollTo(0, 0);
+
+  const opt = {
+    margin: 12,
+    filename: `Short-PIA-Health-${projectName.replace(/[^a-z0-9]/gi, '-')}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 794,
+      // Exclude page chrome that visually overlaps the report element
+      ignoreElements: (node) =>
+        node.id === 'loading-overlay' ||
+        node.id === 'report-preview-modal' ||
+        node.tagName === 'HEADER'
+    },
+    pagebreak: { mode: ['css', 'legacy'] },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+  document.getElementById('loading-overlay').style.display = 'flex';
+  html2pdf().set(opt).from(el).save().then(() => {
+    document.body.removeChild(el);
+    document.getElementById('loading-overlay').style.display = 'none';
+  });
+}
+
+function exportJSON() {
+  collectCurrentStepData();
+  saveState();
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Short-PIA-Health-${(state.project.name || 'export').replace(/[^a-z0-9]/gi, '-')}.json`;
+  a.click();
+}
+
+function resetForm() {
+  if (!confirm('Are you sure you want to clear all your answers and start again?')) return;
+  if (!confirm('This cannot be undone. All your data will be deleted.')) return;
+  localStorage.removeItem(APP_KEY);
+  state = getDefaultState();
+  navigateTo(0);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function initApp() {
+  const saved = loadState();
+  if (saved) {
+    // Deep merge saved state with defaults to handle new fields
+    state = getDefaultState();
+    Object.assign(state, saved);
+    // Ensure risks.items has all keys
+    if (!state.risks.items) state.risks.items = getDefaultRiskItems();
+    RISK_ITEMS.forEach(r => { if (!state.risks.items[r.key]) state.risks.items[r.key] = { checked: false, mitigation: '' }; });
+    if (!state.risks.items.other) state.risks.items.other = { checked: false, description: '', mitigation: '' };
+    if (!state.access.roles || state.access.roles.length === 0) state.access.roles = [{ role: '', organisation: '', accessType: 'view' }];
+    if (!state.actions.table || state.actions.table.length === 0) state.actions.table = [{ risk: '', action: '', who: '', byWhen: '' }];
+  } else {
+    state = getDefaultState();
+  }
+
+  buildWizardSteps();
+  navigateTo(state.currentStep || 0);
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>

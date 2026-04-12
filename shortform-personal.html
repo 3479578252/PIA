@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Short Privacy Assessment (Personal Information) — Australian Privacy Principles</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { primary: '#059669', 'primary-light': '#10b981' } } }
+}
+</script>
+<style>
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .save-indicator { transition: opacity 0.3s ease; }
+  #report-preview-modal { display: none; }
+  #report-preview-modal.active { display: flex; }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+<!-- Header -->
+<header class="bg-primary text-white shadow-lg sticky top-0 z-40">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="text-emerald-200 hover:text-white text-sm flex-shrink-0">← Home</a>
+      <div>
+        <h1 class="text-base font-bold">Short Privacy Assessment (Personal Information)</h1>
+        <p class="text-xs text-emerald-200">Privacy Act 1988 (Cth) — Australian Privacy Principles</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="save-indicator" class="save-indicator text-xs text-emerald-200 opacity-0">Saved</span>
+      <button onclick="resetForm()" class="text-xs bg-emerald-800 hover:bg-emerald-700 px-3 py-1 rounded" title="Clear all data and start again">Reset</button>
+    </div>
+  </div>
+</header>
+
+<!-- Progress bar -->
+<div class="bg-white border-b shadow-sm sticky top-[52px] z-30">
+  <div class="max-w-3xl mx-auto px-4 py-2.5">
+    <div class="flex items-center justify-between mb-1.5">
+      <span class="text-xs text-slate-500" id="step-label">Step 1 of 8</span>
+      <span class="text-xs text-slate-400" id="step-name-label">About Your Project</span>
+    </div>
+    <div class="w-full bg-slate-200 rounded-full h-1.5">
+      <div id="progress-fill" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width:12.5%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Wizard container -->
+<main class="max-w-3xl mx-auto px-4 py-6">
+  <div id="wizard-container"></div>
+</main>
+
+<!-- Navigation -->
+<div class="sticky bottom-0 bg-white border-t shadow-lg z-30">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
+    <button id="btn-prev" onclick="prevStep()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors text-sm">Back</button>
+    <button id="btn-next" onclick="nextStep()" class="px-5 py-2 bg-primary hover:bg-primary-light text-white rounded-lg font-medium transition-colors text-sm">Next</button>
+  </div>
+</div>
+
+<!-- Report Preview Modal -->
+<div id="report-preview-modal" class="fixed inset-0 z-50 bg-black/50 flex-col">
+  <div class="bg-white flex items-center justify-between px-4 py-2 shadow">
+    <h2 class="font-bold">Report Preview</h2>
+    <div class="flex gap-2">
+      <button onclick="exportPDF()" class="px-4 py-1.5 bg-primary text-white rounded text-sm hover:bg-primary-light">Download PDF</button>
+      <button onclick="closePreview()" class="px-4 py-1.5 bg-slate-200 text-slate-700 rounded text-sm hover:bg-slate-300">Close</button>
+    </div>
+  </div>
+  <div class="flex-1 overflow-y-auto bg-slate-100 p-4">
+    <div class="max-w-[700px] mx-auto bg-white shadow-lg">
+      <div id="report-content" class="p-8"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay" class="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center" style="display:none;">
+  <div class="bg-white rounded-lg px-8 py-6 shadow-xl text-center">
+    <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+    <p class="text-slate-700">Generating PDF...</p>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const APP_KEY = 'shortform-pia-personal-app';
+
+const STEP_NAMES = [
+  'About Your Project',
+  'Personal Information Involved',
+  'Collection and Notification',
+  'Use, Disclosure and Marketing',
+  'Keeping Information Safe',
+  'Access, Correction and Quality',
+  'Privacy Risks',
+  'Actions and Sign-off'
+];
+
+const PERSONAL_INFO_TYPES = [
+  'Name and contact details (address, phone number, email)',
+  'Date of birth or age',
+  'Gender or sex',
+  'Financial information (bank details, credit card, income, assets)',
+  'Tax File Number (TFN) or other government identifiers',
+  'Employment or education records',
+  'Identity documents (passport, driver licence)',
+  'Biometric information (fingerprints, facial recognition, voice)',
+  'Online identifiers (IP address, cookies, usernames, account details)',
+  'Location data or movement information',
+  'Sensitive information (racial or ethnic origin, political opinions, religious beliefs, sexual orientation, criminal record, health information)',
+  'Other personal information'
+];
+
+const SECURITY_CONTROLS = [
+  'Password protection and multi-factor authentication',
+  'Only authorised staff can access the information (role-based access)',
+  'Data is encrypted (scrambled so only authorised users can read it)',
+  'Records are kept of who accessed information and when (audit logs)',
+  'Staff have completed privacy and security training',
+  'Physical security is in place (e.g. locked rooms, filing cabinets)',
+  'Regular security reviews or audits are conducted',
+  'A privacy policy is publicly available (APP 1)'
+];
+
+const RISK_ITEMS = [
+  { key: 'unauthorisedAccess', label: 'Unauthorised access to personal information', example: 'Someone who shouldn\'t see the information is able to access it — for example, through a shared login or inadequate access controls.', suggestions: [
+    'Implement role-based access controls (RBAC)',
+    'Require multi-factor authentication (MFA)',
+    'Conduct regular access reviews and remove unused accounts',
+    'Maintain audit logs of all access to personal information',
+    'Apply the principle of least privilege'
+  ]},
+  { key: 'dataBreach', label: 'Data breach or cyber attack', example: 'Personal information is hacked, leaked, or accidentally sent to the wrong person or organisation.', suggestions: [
+    'Encrypt personal information at rest and in transit',
+    'Develop and test an incident response and data breach notification plan',
+    'Conduct regular vulnerability assessments and penetration testing',
+    'Implement intrusion detection and monitoring systems',
+    'Train staff on phishing and social engineering awareness'
+  ]},
+  { key: 'beyondPurpose', label: 'Personal information used beyond the original purpose (APP 6)', example: 'Information collected for one purpose is later used for something the individual wouldn\'t reasonably expect — for example, using customer data for direct marketing without consent.', suggestions: [
+    'Document the primary purpose of collection clearly and communicate it to individuals',
+    'Obtain separate consent for any secondary use or disclosure (APP 6)',
+    'Review all new uses against APP 6 permitted purposes before proceeding',
+    'De-identify information where the original identity is not required',
+    'Seek HREC approval for research use of personal information'
+  ]},
+  { key: 'noNotification', label: 'Individual not notified of collection or use of their information (APP 5)', example: 'People are not told what information is collected, why it is collected, how it will be used, and who it may be shared with.', suggestions: [
+    'Provide a privacy collection statement at the point of collection (APP 5)',
+    'Update the organisation\'s privacy policy to cover this collection',
+    'Display privacy information prominently on forms, websites, and in-person',
+    'Train staff to explain what information is collected and why',
+    'Review and update privacy notices before collection begins'
+  ]},
+  { key: 'crossBorder', label: 'Cross-border disclosure without adequate safeguards (APP 8)', example: 'Personal information is sent overseas or to an overseas system without ensuring the recipient meets equivalent privacy standards.', suggestions: [
+    'Ensure the recipient is subject to equivalent privacy obligations (APP 8)',
+    'Execute a data transfer agreement with binding privacy obligations',
+    'Obtain individual consent for overseas disclosure',
+    'Assess the privacy laws of the destination country',
+    'Use de-identified data where the identity of individuals is not required'
+  ]},
+  { key: 'noAccess', label: 'Individual cannot access or correct their information (APP 12/13)', example: 'People are unable to see their own personal information or to correct errors when they request it.', suggestions: [
+    'Establish a documented process for access and correction requests (APP 12/13)',
+    'Publish information about how individuals can request access',
+    'Train staff on how to respond to access and correction requests',
+    'Respond to requests within the required statutory timeframes',
+    'Document decisions and reasons where access is denied'
+  ]},
+  { key: 'inaccurateData', label: 'Inaccurate or out-of-date information causes harm (APP 10)', example: 'Decisions affecting individuals are based on personal information that is wrong, incomplete, or no longer current.', suggestions: [
+    'Implement data validation checks at point of entry (APP 10)',
+    'Provide individuals with the ability to review and correct their records',
+    'Schedule regular data quality audits',
+    'Cross-check information with source records where possible',
+    'Establish a clear process for individuals to request corrections'
+  ]},
+  { key: 'excessiveCollection', label: 'More personal information collected than is reasonably necessary (APP 3.2)', example: 'The project collects personal information beyond what is needed for its stated purpose — for example, asking for date of birth when only an age range is required, or retaining fields that are no longer used.', suggestions: [
+    'Review all data fields against the stated purpose — collect only what is necessary (APP 3.2)',
+    'Apply data minimisation principles at the design stage',
+    'Remove or disable fields that are no longer needed',
+    'Conduct periodic necessity reviews as the project evolves',
+    'Limit the personal information requested from third parties'
+  ]},
+  { key: 'retentionDisposal', label: 'Personal information retained longer than necessary or not securely destroyed (APP 11.2)', example: 'Information is kept indefinitely without a defined retention period, or is deleted in a way that allows recovery — for example, records not purged from backups or archived systems after the retention period expires.', suggestions: [
+    'Implement a retention schedule with defined destruction timeframes (APP 11.2)',
+    'Configure automated deletion or archiving workflows',
+    'Use secure destruction methods (shredding, cryptographic erasure)',
+    'Audit archived and backup systems to ensure purging occurs',
+    'Document all disposal decisions and methods'
+  ]},
+  { key: 'reIdentification', label: 'Re-identification of de-identified or anonymised information', example: 'Data that has been anonymised or de-identified can be re-identified when combined with other datasets or through statistical inference — for example, linking de-identified health records with publicly available information to identify individuals.', suggestions: [
+    'Apply k-anonymity, l-diversity, or differential privacy techniques',
+    'Restrict the ability to link de-identified datasets with external sources',
+    'Conduct a re-identification risk assessment before releasing data',
+    'Limit combinations of data fields that could identify individuals',
+    'Use synthetic data where analysis does not require real records'
+  ]},
+  { key: 'thirdPartyVendors', label: 'Inadequate privacy controls on third-party service providers (APP 11.1)', example: 'Vendors, contractors, or cloud service providers who handle personal information on your behalf do not have adequate contractual privacy obligations, security standards, or audit rights in place.', suggestions: [
+    'Include binding privacy and security clauses in all vendor contracts (APP 11.1)',
+    'Conduct privacy assessments of vendors before engagement',
+    'Require vendors to execute a Data Processing Agreement (DPA)',
+    'Audit vendor compliance with privacy obligations periodically',
+    'Limit the personal information shared with third parties to what is necessary'
+  ]},
+  { key: 'sensitiveInfoNoConsent', label: 'Sensitive information collected or used without explicit consent or legal authority (APP 3.3)', example: 'Sensitive categories such as racial or ethnic origin, health information, biometric data, sexual orientation, or criminal records are collected or disclosed without the individual\'s explicit consent or a clear legal basis.', suggestions: [
+    'Obtain explicit consent before collecting sensitive information (APP 3.3)',
+    'Document the legal authority for collecting sensitive information',
+    'Restrict access to sensitive information to authorised staff only',
+    'Review whether collection of sensitive information is strictly necessary',
+    'Train staff on the heightened requirements for sensitive information'
+  ]},
+  { key: 'unsolicitedInfo', label: 'Unsolicited personal information received and not destroyed (APP 4)', example: 'Personal information is received that was not requested — for example, a job applicant provides more detail than was asked for, or information is sent to you by mistake — and there is no process to assess whether it can lawfully be kept or must be destroyed.', suggestions: [
+    'Establish a policy for handling unsolicited personal information (APP 4)',
+    'Train staff to identify unsolicited information and escalate appropriately',
+    'Assess within a reasonable time whether unsolicited info can lawfully be kept',
+    'Securely destroy unsolicited information that cannot lawfully be retained',
+    'Notify the sender if unsolicited information has been destroyed'
+  ]},
+  { key: 'directMarketing', label: 'Personal information used for direct marketing without consent or opt-out (APP 7)', example: 'Individuals receive marketing communications using their personal information without having consented, or without a clear and easy way to opt out of future communications.', suggestions: [
+    'Obtain opt-in consent before using personal information for marketing (APP 7)',
+    'Include a clear and easy opt-out mechanism in all marketing communications',
+    'Honour opt-out requests promptly and without conditions',
+    'Maintain a suppression list of individuals who have opted out',
+    'Review marketing lists regularly to ensure accuracy and currency'
+  ]},
+  { key: 'automatedDecisionMaking', label: 'Automated or algorithmic decision-making with significant impact on individuals', example: 'Decisions that significantly affect individuals — such as eligibility assessments, credit decisions, or risk scoring — are made automatically using personal information without meaningful human review or transparency about how the decision was reached.', suggestions: [
+    'Implement meaningful human review for all significant automated decisions',
+    'Document and publish the logic, criteria, and data used in automated decisions',
+    'Provide individuals with the right to contest automated decisions',
+    'Test automated systems regularly for bias, errors, and disparate impact',
+    'Disclose the use of automated decision-making to individuals at point of collection'
+  ]}
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {};
+let saveTimeout = null;
+
+function getDefaultRiskItems() {
+  const items = {};
+  RISK_ITEMS.forEach(r => { items[r.key] = { checked: false, mitigation: '' }; });
+  items.other = { checked: false, description: '', mitigation: '' };
+  return items;
+}
+
+function getDefaultState() {
+  return {
+    currentStep: 0,
+    lastSaved: null,
+    project: { name: '', description: '', lead: '', organisation: '', date: new Date().toISOString().split('T')[0] },
+    personalInfo: { types: [], sensitiveInfo: '', whose: [], numberOfPeople: '', anonymousOption: '' },
+    collection: { method: '', purpose: '', notified: '', notifiedMethod: '', legalBasis: '', legalBasisOther: '' },
+    disclosure: { originalPurpose: 'yes', newPurpose: '', app6Basis: '', app6BasisOther: '', sharedOutside: 'no', sharedWith: '', crossBorder: 'no', crossBorderDetails: '', directMarketing: 'no', govIdentifiers: 'no', govIdentifiersApp9Basis: '', govIdentifiersApp9Other: '' },
+    security: { storedWhere: '', controls: [], securityResponsible: '', otherStorageDetails: '' },
+    access: { accuracyMeasures: '', accessProcess: '', correctionProcess: '', period: '', disposalMethod: '', disposalAuthority: '' },
+    risks: { items: getDefaultRiskItems() },
+    actions: {
+      table: [{ risk: '', action: '', who: '', byWhen: '' }],
+      assessorName: '', assessorPosition: '', assessorDate: new Date().toISOString().split('T')[0],
+      assessorSignature: '', outcome: 'approved'
+    }
+  };
+}
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function saveState() {
+  state.lastSaved = new Date().toISOString();
+  localStorage.setItem(APP_KEY, JSON.stringify(state));
+  const ind = document.getElementById('save-indicator');
+  if (ind) {
+    const t = new Date(state.lastSaved);
+    ind.textContent = `Saved ${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}:${t.getSeconds().toString().padStart(2,'0')}`;
+    ind.style.opacity = '1';
+    setTimeout(() => { ind.style.opacity = '0'; }, 2000);
+  }
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(APP_KEY);
+    if (!saved) return null;
+    return JSON.parse(saved);
+  } catch { return null; }
+}
+
+function debounceSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(saveState, 500);
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setNestedValue(obj, path, value) {
+  const keys = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (cur[keys[i]] == null) cur[keys[i]] = {};
+    cur = cur[keys[i]];
+  }
+  cur[keys[keys.length - 1]] = value;
+}
+
+function getNestedValue(obj, path) {
+  return path.split('.').reduce((cur, k) => (cur == null ? '' : cur[k]), obj) ?? '';
+}
+
+// ============================================================
+// INPUT FIELD HELPERS
+// ============================================================
+const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400';
+const labelCls = 'block text-sm font-medium text-slate-700 mb-1';
+const tipCls = 'bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-5 text-sm text-emerald-700';
+
+function field(id, label, type, opts = {}) {
+  const hint = opts.hint ? `<p class="text-xs text-slate-400 mt-1">${opts.hint}</p>` : '';
+  const req = opts.required ? ' <span class="text-red-500">*</span>' : '';
+  if (type === 'textarea') {
+    return `<div class="mb-4">
+      <label class="${labelCls}">${label}${req}</label>
+      <textarea id="${id}" data-bind="${opts.bind || id}" rows="${opts.rows || 3}" placeholder="${opts.placeholder || ''}" class="${inputCls} resize-y">${escapeHtml(getNestedValue(state, opts.bind || id))}</textarea>
+      ${hint}
+    </div>`;
+  }
+  if (type === 'select') {
+    const options = (opts.options || []).map(o => {
+      const val = typeof o === 'string' ? o : o.value;
+      const lbl = typeof o === 'string' ? o : o.label;
+      const sel = getNestedValue(state, opts.bind || id) === val ? 'selected' : '';
+      return `<option value="${escapeHtml(val)}" ${sel}>${escapeHtml(lbl)}</option>`;
+    }).join('');
+    return `<div class="mb-4">
+      <label class="${labelCls}">${label}${req}</label>
+      <select id="${id}" data-bind="${opts.bind || id}" class="${inputCls}">${options}</select>
+      ${hint}
+    </div>`;
+  }
+  const val = escapeHtml(getNestedValue(state, opts.bind || id));
+  return `<div class="mb-4">
+    <label class="${labelCls}">${label}${req}</label>
+    <input id="${id}" data-bind="${opts.bind || id}" type="${type}" value="${val}" placeholder="${opts.placeholder || ''}" class="${inputCls}">
+    ${hint}
+  </div>`;
+}
+
+function radioGroup(name, options, currentVal, onChange) {
+  return options.map(o => `
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="${name}" value="${o.val}" ${currentVal === o.val ? 'checked' : ''} ${onChange ? `onchange="${onChange}(this.value)"` : ''} class="accent-emerald-600 w-4 h-4">
+      <span class="text-sm text-slate-700">${o.label}</span>
+    </label>`).join('');
+}
+
+// ============================================================
+// STEP BUILDERS
+// ============================================================
+function buildStep0() {
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">About Your Project</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us the basics about the project or activity involving personal information.</p>
+    <div class="${tipCls}">This assessment is for projects involving <strong>personal information</strong> under the <strong>Privacy Act 1988 (Cth)</strong> and the <strong>Australian Privacy Principles (APPs)</strong>. If your project involves health information, use the <a href="shortform.html" class="underline">Short Privacy Assessment (Health Information)</a> instead.</div>
+    ${field('s0-name', 'Project name', 'text', { bind: 'project.name', required: true, placeholder: 'e.g. New customer relationship management system' })}
+    ${field('s0-desc', 'What is this project about?', 'textarea', { bind: 'project.description', rows: 3, placeholder: 'Briefly describe what your project does and why. What problem does it solve?' })}
+    <div class="grid sm:grid-cols-2 gap-4">
+      ${field('s0-lead', 'Your name (project lead)', 'text', { bind: 'project.lead', placeholder: 'Full name' })}
+      ${field('s0-org', 'Organisation or team', 'text', { bind: 'project.organisation', placeholder: 'e.g. Department of Health — Digital Services' })}
+    </div>
+    ${field('s0-date', 'Date of assessment', 'date', { bind: 'project.date' })}
+  `;
+}
+
+function buildStep1() {
+  const types = state.personalInfo.types || [];
+  const checkboxes = PERSONAL_INFO_TYPES.map(t => `
+    <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded hover:bg-slate-50">
+      <input type="checkbox" data-array="personalInfo.types" data-value="${escapeHtml(t)}" ${types.includes(t) ? 'checked' : ''} class="mt-0.5 accent-emerald-600 w-4 h-4 flex-shrink-0">
+      <span class="text-sm text-slate-700">${escapeHtml(t)}</span>
+    </label>`).join('');
+
+  const whose = state.personalInfo.whose || [];
+  const whoseOpts = [
+    { val: 'customers', label: 'Customers or clients' },
+    { val: 'employees', label: 'Employees or staff' },
+    { val: 'contractors', label: 'Contractors or volunteers' },
+    { val: 'public', label: 'Members of the public' },
+    { val: 'children', label: 'Children or young people (under 18)' },
+    { val: 'other', label: 'Other' }
+  ];
+
+  const sensitiveVal = state.personalInfo.sensitiveInfo || '';
+  const anonVal = state.personalInfo.anonymousOption || '';
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">What Personal Information Is Involved?</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us what types of personal information your project will collect, use, or store. <span class="text-slate-400">(APP 3)</span></p>
+    <div class="mb-5">
+      <p class="${labelCls}">What types of personal information are involved? <span class="text-red-500">*</span></p>
+      <p class="text-xs text-slate-400 mb-2">Tick all that apply.</p>
+      <div class="border border-slate-200 rounded-lg divide-y divide-slate-100">${checkboxes}</div>
+    </div>
+    <div class="mb-5">
+      <p class="${labelCls}">Does the project involve <strong>sensitive information</strong>? <span class="text-slate-400 font-normal text-xs">(APP 3.3)</span></p>
+      <p class="text-xs text-slate-400 mb-2">Sensitive information includes racial or ethnic origin, political opinions, religious beliefs, sexual orientation, criminal record, health information, or biometric data. Sensitive information generally requires explicit consent to collect.</p>
+      <div class="flex flex-col gap-2">
+        ${radioGroup('sensitiveInfo', [
+          { val: 'yes', label: 'Yes — the project involves sensitive information' },
+          { val: 'no', label: 'No — the project does not involve sensitive information' },
+          { val: 'not-sure', label: 'Not sure' }
+        ], sensitiveVal, null)}
+      </div>
+    </div>
+    <div class="mb-5">
+      <p class="${labelCls}">Whose personal information is this? <span class="text-red-500">*</span></p>
+      <p class="text-xs text-slate-400 mb-2">Tick all that apply.</p>
+      <div class="border border-slate-200 rounded-lg divide-y divide-slate-100">
+        ${whoseOpts.map(o => `
+          <label class="flex items-center gap-2.5 cursor-pointer p-2 rounded hover:bg-slate-50">
+            <input type="checkbox" data-array="personalInfo.whose" data-value="${o.val}" ${whose.includes(o.val) ? 'checked' : ''} class="accent-emerald-600 w-4 h-4 flex-shrink-0">
+            <span class="text-sm text-slate-700">${o.label}</span>
+          </label>`).join('')}
+      </div>
+    </div>
+    ${field('s1-num', 'Approximately how many people\'s information is involved?', 'text', { bind: 'personalInfo.numberOfPeople', placeholder: 'e.g. 1,000 customers, or approximately 5,000 per year' })}
+    <div class="mb-4">
+      <p class="${labelCls}">Will you offer individuals the option to deal with you anonymously or using a pseudonym? <span class="text-slate-400 font-normal text-xs">(APP 2)</span></p>
+      <p class="text-xs text-slate-400 mb-2">The APPs require you to give individuals the option of not identifying themselves where it is lawful and practicable to do so.</p>
+      <div class="flex flex-col gap-2">
+        ${radioGroup('anonymousOption', [
+          { val: 'yes', label: 'Yes — individuals can interact anonymously or using a pseudonym' },
+          { val: 'no', label: 'No — we need to identify individuals to deliver this service' },
+          { val: 'partial', label: 'Partially — some interactions can be anonymous' }
+        ], anonVal, null)}
+      </div>
+    </div>
+  `;
+}
+
+function buildStep2() {
+  const methodVal = state.collection.method || '';
+  const notifiedVal = state.collection.notified || '';
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Collection and Notification</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us how personal information will be collected and whether individuals will be notified. <span class="text-slate-400">(APP 3, 5)</span></p>
+    <div class="mb-5">
+      <p class="${labelCls}">How will the personal information be collected? <span class="text-slate-400 font-normal text-xs">(APP 3)</span></p>
+      <p class="text-xs text-slate-400 mb-2">The APPs generally require collecting information directly from the individual wherever it is reasonable and practicable to do so.</p>
+      <div class="flex flex-col gap-2">
+        ${radioGroup('collectionMethod', [
+          { val: 'direct', label: 'Directly from the individual (they provide it themselves)' },
+          { val: 'third-party', label: 'From a third party (e.g. another organisation, broker, public source)' },
+          { val: 'both', label: 'Both directly from the individual and from third parties' },
+          { val: 'existing', label: 'Using personal information already held by our organisation' }
+        ], methodVal, null)}
+      </div>
+    </div>
+    ${field('s2-purpose', 'What will this personal information be used for?', 'textarea', {
+      bind: 'collection.purpose', rows: 3,
+      placeholder: 'Describe exactly what you will do with the personal information. Be as specific as possible.'
+    })}
+    <div class="mb-5">
+      <p class="${labelCls}">Will individuals be notified about the collection of their personal information? <span class="text-slate-400 font-normal text-xs">(APP 5)</span></p>
+      <p class="text-xs text-slate-400 mb-2">APP 5 requires you to take reasonable steps to notify individuals of the collection, the purpose, and who you might share it with. This is usually done through a privacy notice or collection statement.</p>
+      <div class="flex flex-col gap-2">
+        ${radioGroup('notified', [
+          { val: 'yes', label: 'Yes — individuals will be notified via a privacy notice or collection statement' },
+          { val: 'existing', label: 'Yes — our existing privacy policy already covers this collection' },
+          { val: 'planned', label: 'Not yet — we will put a notification in place before collection begins' },
+          { val: 'no', label: 'No — we do not plan to notify individuals' }
+        ], notifiedVal, 'toggleNotifiedMethod')}
+      </div>
+    </div>
+    <div id="notified-method-section" class="${(notifiedVal === 'yes' || notifiedVal === 'existing') ? '' : 'hidden'}">
+      ${field('s2-notifmethod', 'How will individuals be notified?', 'textarea', {
+        bind: 'collection.notifiedMethod', rows: 2,
+        placeholder: 'e.g. Privacy collection notice on our website registration form, updated Privacy Policy published at www.example.gov.au/privacy'
+      })}
+    </div>
+  `;
+}
+
+function buildStep3() {
+  const origPurp = state.disclosure.originalPurpose || 'yes';
+  const sharedOut = state.disclosure.sharedOutside || 'no';
+  const crossBorder = state.disclosure.crossBorder || 'no';
+  const directMktg = state.disclosure.directMarketing || 'no';
+  const govId = state.disclosure.govIdentifiers || 'no';
+  const govApp9Basis = state.disclosure.govIdentifiersApp9Basis || '';
+  const app6Basis = state.disclosure.app6Basis || '';
+
+  const legalOpts = [
+    { value: '', label: 'Select the main legal basis...' },
+    { value: 'APP 3.2 — Reasonably necessary for the organisation\'s functions or activities', label: 'APP 3.2 — Reasonably necessary for the organisation\'s functions or activities' },
+    { value: 'APP 3.2 — Directly related to a government agency\'s functions or activities', label: 'APP 3.2 — Directly related to a government agency\'s functions or activities' },
+    { value: 'APP 3.3(a) — Consent of the individual (sensitive information)', label: 'APP 3.3(a) — Consent of the individual (sensitive information)' },
+    { value: 'APP 3.4(a) — Required or authorised by an Australian law or court/tribunal order', label: 'APP 3.4(a) — Required or authorised by an Australian law or court/tribunal order' },
+    { value: 'APP 3.4(b) — Permitted general situation (Privacy Act 1988, s 16A)', label: 'APP 3.4(b) — Permitted general situation (Privacy Act 1988, s 16A)' },
+    { value: 'APP 3.4(c) — Permitted health situation (Privacy Act 1988, s 16B)', label: 'APP 3.4(c) — Permitted health situation (Privacy Act 1988, s 16B)' },
+    { value: 'Other', label: 'Other (describe below)' }
+  ];
+
+  const app6Opts = [
+    { value: '', label: 'Select the applicable APP 6 basis...' },
+    { value: 'APP 6.2(a) — The individual has consented to the secondary use or disclosure', label: 'APP 6.2(a) — The individual has consented to the secondary use or disclosure' },
+    { value: 'APP 6.2(b) — The individual would reasonably expect this use, and it is related to the primary purpose', label: 'APP 6.2(b) — The individual would reasonably expect this use, and it is related to the primary purpose' },
+    { value: 'APP 6.2(c) — Required or authorised by an Australian law or court/tribunal order', label: 'APP 6.2(c) — Required or authorised by an Australian law or court/tribunal order' },
+    { value: 'APP 6.2(d) — A permitted general situation applies (Privacy Act 1988, s 16A)', label: 'APP 6.2(d) — A permitted general situation applies (Privacy Act 1988, s 16A)' },
+    { value: 'APP 6.2(e) — A permitted health situation applies (Privacy Act 1988, s 16B)', label: 'APP 6.2(e) — A permitted health situation applies (Privacy Act 1988, s 16B)' },
+    { value: 'Other', label: 'Other (describe below)' }
+  ];
+
+  const app9Opts = [
+    { value: '', label: 'Select the applicable APP 9 basis...' },
+    { value: 'APP 9.2(a) — Reasonably necessary to verify the individual\'s identity for the organisation\'s activities', label: 'APP 9.2(a) — Reasonably necessary to verify the individual\'s identity for the organisation\'s activities' },
+    { value: 'APP 9.2(b) — Required or authorised by an Australian law or court/tribunal order', label: 'APP 9.2(b) — Required or authorised by an Australian law or court/tribunal order' },
+    { value: 'APP 9.2(c) — A permitted general situation applies (Privacy Act 1988, s 16A)', label: 'APP 9.2(c) — A permitted general situation applies (Privacy Act 1988, s 16A)' },
+    { value: 'APP 9.2(d) — Required for a Commonwealth contract (contracted service provider)', label: 'APP 9.2(d) — Required for a Commonwealth contract (contracted service provider)' },
+    { value: 'Other', label: 'Other (describe below)' }
+  ];
+
+  const purpOpts = [
+    { val: 'yes', label: 'Yes — we will only use it for the purpose it was collected' },
+    { val: 'partly', label: 'Partly — we will also use it for a secondary purpose' },
+    { val: 'no', label: 'No — we intend to use it for a different purpose' }
+  ];
+
+  const yesNo = (name, val, onChange) => `
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="${name}" value="yes" ${val === 'yes' ? 'checked' : ''} ${onChange ? `onchange="${onChange}(this.value)"` : ''} class="accent-emerald-600 w-4 h-4">
+      <span class="text-sm text-slate-700">Yes</span>
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="${name}" value="no" ${val !== 'yes' ? 'checked' : ''} ${onChange ? `onchange="${onChange}(this.value)"` : ''} class="accent-emerald-600 w-4 h-4">
+      <span class="text-sm text-slate-700">No</span>
+    </label>`;
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Use, Disclosure and Marketing</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us how personal information will be used or shared, and whether it will be used for marketing. <span class="text-slate-400">(APP 6, 7, 8)</span></p>
+
+    <div class="mb-5">
+      <p class="${labelCls}">Will the information be used for the same purpose it was collected for? <span class="text-slate-400 font-normal text-xs">(APP 6)</span></p>
+      <div class="flex flex-col gap-2 mt-1">
+        ${radioGroup('originalPurpose', purpOpts, origPurp, 'toggleNewPurpose')}
+      </div>
+    </div>
+    <div id="new-purpose-section" class="${origPurp !== 'yes' ? '' : 'hidden'} mb-4 pl-4 border-l-4 border-amber-300 bg-amber-50 rounded-r-lg py-3 pr-3">
+      <p class="text-xs font-semibold text-amber-700 mb-2">APP 6 compliance required — secondary or different uses must be permitted under APP 6.</p>
+      ${field('s3-newpurp', 'What is the secondary or different purpose?', 'textarea', {
+        bind: 'disclosure.newPurpose', rows: 2,
+        placeholder: 'Explain what additional purpose you intend to use the information for...'
+      })}
+      ${field('s3-app6basis', 'Under which APP 6 provision is this secondary use or disclosure permitted? (APP 6.2, Privacy Act 1988 (Cth))', 'select', {
+        bind: 'disclosure.app6Basis', options: app6Opts
+      })}
+      <div id="app6-other-section" class="${app6Basis === 'Other' ? '' : 'hidden'} mt-2">
+        ${field('s3-app6other', 'Please describe the permitted basis', 'textarea', {
+          bind: 'disclosure.app6BasisOther', rows: 2,
+          placeholder: 'Describe why this secondary use or disclosure is permitted under APP 6...'
+        })}
+      </div>
+    </div>
+    <div id="legal-authority-section" class="${origPurp !== 'yes' ? 'hidden' : ''} mb-5">
+      ${field('s3-legal', 'What is the legal basis for collecting and using this personal information?', 'select', {
+        bind: 'collection.legalBasis', options: legalOpts
+      })}
+      <div id="legal-other-section" class="${state.collection.legalBasis === 'Other' ? '' : 'hidden'}">
+        ${field('s3-legalnote', 'Please describe your legal basis', 'textarea', { bind: 'collection.legalBasisOther', rows: 2 })}
+      </div>
+    </div>
+
+    <div class="mb-5">
+      <p class="${labelCls}">Will personal information be disclosed to third parties? <span class="text-slate-400 font-normal text-xs">(APP 6)</span></p>
+      <div class="flex gap-6 mt-1">
+        ${yesNo('sharedOutside', sharedOut, 'toggleSharedOutside')}
+      </div>
+    </div>
+    <div id="shared-with-section" class="${sharedOut === 'yes' ? '' : 'hidden'}">
+      ${field('s3-sharedwith', 'Who will it be disclosed to, and why?', 'textarea', {
+        bind: 'disclosure.sharedWith', rows: 2,
+        placeholder: 'e.g. Shared with our payroll provider under a data processing agreement, or disclosed to the ATO as required by law.'
+      })}
+    </div>
+
+    <div class="mb-5">
+      <p class="${labelCls}">Will personal information be disclosed overseas? <span class="text-slate-400 font-normal text-xs">(APP 8)</span></p>
+      <p class="text-xs text-slate-400 mb-2">APP 8 requires you to take reasonable steps to ensure any overseas recipient does not breach the APPs. This includes cloud services hosted outside Australia.</p>
+      <div class="flex gap-6 mt-1">
+        ${yesNo('crossBorder', crossBorder, 'toggleCrossBorder')}
+      </div>
+    </div>
+    <div id="cross-border-section" class="${crossBorder === 'yes' ? '' : 'hidden'}">
+      ${field('s3-crossborder', 'Where will it be sent, and what safeguards are in place?', 'textarea', {
+        bind: 'disclosure.crossBorderDetails', rows: 2,
+        placeholder: 'e.g. Data stored on AWS servers in the USA. Covered by our Data Processing Agreement which requires AWS to comply with equivalent privacy standards.'
+      })}
+    </div>
+
+    <div class="mb-5">
+      <p class="${labelCls}">Will personal information be used for direct marketing? <span class="text-slate-400 font-normal text-xs">(APP 7)</span></p>
+      <p class="text-xs text-slate-400 mb-2">APP 7 restricts the use of personal information for direct marketing without consent. Individuals must be able to opt out.</p>
+      <div class="flex gap-6 mt-1">
+        ${yesNo('directMarketing', directMktg, null)}
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <p class="${labelCls}">Does the project involve government-related identifiers such as a Tax File Number, Medicare number, or passport number? <span class="text-slate-400 font-normal text-xs">(APP 9)</span></p>
+      <p class="text-xs text-slate-400 mb-2">APP 9 restricts the adoption, use, and disclosure of government-related identifiers. An organisation must not adopt, use, or disclose a government-related identifier unless a specific exception applies.</p>
+      <div class="flex gap-6 mt-1">
+        ${yesNo('govIdentifiers', govId, 'toggleGovIdentifiers')}
+      </div>
+    </div>
+    <div id="gov-identifiers-section" class="${govId === 'yes' ? '' : 'hidden'} mb-4 pl-4 border-l-4 border-amber-300 bg-amber-50 rounded-r-lg py-3 pr-3">
+      <p class="text-xs font-semibold text-amber-700 mb-2">APP 9 compliance required — please confirm the basis for using this identifier.</p>
+      ${field('s3-app9basis', 'Under which APP 9 provision is this use permitted? (APP 9.2, Privacy Act 1988 (Cth))', 'select', {
+        bind: 'disclosure.govIdentifiersApp9Basis', options: app9Opts
+      })}
+      <div id="gov-identifiers-other-section" class="${govApp9Basis === 'Other' ? '' : 'hidden'} mt-2">
+        ${field('s3-app9other', 'Please describe the basis for using this identifier', 'textarea', {
+          bind: 'disclosure.govIdentifiersApp9Other', rows: 2,
+          placeholder: 'Describe why the use of this government-related identifier is necessary and permitted...'
+        })}
+      </div>
+    </div>
+  `;
+}
+
+function buildStep4() {
+  const controls = state.security.controls || [];
+  const checkboxes = SECURITY_CONTROLS.map(c => `
+    <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded hover:bg-slate-50">
+      <input type="checkbox" data-array="security.controls" data-value="${escapeHtml(c)}" ${controls.includes(c) ? 'checked' : ''} class="mt-0.5 accent-emerald-600 w-4 h-4 flex-shrink-0">
+      <span class="text-sm text-slate-700">${escapeHtml(c)}</span>
+    </label>`).join('');
+
+  const storageOpts = [
+    { value: '', label: 'Select where information will be stored...' },
+    { value: 'On-site computer system', label: 'On-site computer system (within our organisation)' },
+    { value: 'Cloud-based system or service', label: 'Cloud-based system or online service (hosted remotely)' },
+    { value: 'Paper records', label: 'Paper records only' },
+    { value: 'Both electronic and paper', label: 'Both electronic systems and paper records' },
+    { value: 'External drive or USB', label: 'External hard drive or USB' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Keeping Information Safe</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us how you will protect personal information from unauthorised access, misuse, or loss. <span class="text-slate-400">(APP 11)</span></p>
+    <div class="${tipCls}">APP 11 requires you to take reasonable steps to protect personal information from misuse, interference, loss, and from unauthorised access, modification, or disclosure.</div>
+    ${field('s4-stored', 'Where will the personal information be stored?', 'select', {
+      bind: 'security.storedWhere', options: storageOpts
+    })}
+    <div id="s4-other-section" class="${state.security.storedWhere === 'Other' ? '' : 'hidden'}">
+      ${field('s4-otherdetail', 'Please describe where it will be stored', 'text', { bind: 'security.otherStorageDetails', placeholder: '' })}
+    </div>
+    <div class="mb-5">
+      <p class="${labelCls}">What security measures are in place? <span class="text-red-500">*</span></p>
+      <p class="text-xs text-slate-400 mb-2">Tick all that apply to your project.</p>
+      <div class="border border-slate-200 rounded-lg divide-y divide-slate-100">${checkboxes}</div>
+    </div>
+    ${field('s4-responsible', 'Who is responsible for keeping this information safe?', 'text', {
+      bind: 'security.securityResponsible',
+      placeholder: 'e.g. ICT Security Manager — Jane Smith',
+      hint: 'Provide the role or name of the person accountable for information security on this project.'
+    })}
+  `;
+}
+
+function buildStep5() {
+  const disposalOpts = [
+    { value: '', label: 'Select a disposal method...' },
+    { value: 'Secure electronic deletion', label: 'Secure electronic deletion (permanently deleted from all systems)' },
+    { value: 'Professional shredding', label: 'Professional shredding (for paper records)' },
+    { value: 'De-identification', label: 'De-identification (removing names and identifying details)' },
+    { value: 'Return to individual', label: 'Return to the individual' },
+    { value: 'Transfer to archive', label: 'Transfer to a government archive or approved repository' },
+    { value: 'Other', label: 'Other' }
+  ];
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Access, Correction and Quality</h2>
+    <p class="text-slate-500 text-sm mb-5">Tell us how individuals can access and correct their information, and how you will keep it accurate. <span class="text-slate-400">(APP 10, 12, 13)</span></p>
+
+    ${field('s5-accuracy', 'How will you ensure personal information is accurate, complete, and up to date?', 'textarea', {
+      bind: 'access.accuracyMeasures', rows: 2,
+      placeholder: 'e.g. Individuals can update their details via the online portal, or contact our team to request corrections. We conduct annual data quality reviews.',
+      hint: 'APP 10 requires you to take reasonable steps to ensure information is accurate and current before using or disclosing it.'
+    })}
+
+    ${field('s5-access', 'How can individuals access their own personal information?', 'textarea', {
+      bind: 'access.accessProcess', rows: 2,
+      placeholder: 'e.g. Individuals can submit an access request via privacy@example.gov.au. Requests are processed within 30 days.',
+      hint: 'APP 12 gives individuals the right to access personal information we hold about them. Describe your process for handling access requests.'
+    })}
+
+    ${field('s5-correction', 'How can individuals request correction of their personal information?', 'textarea', {
+      bind: 'access.correctionProcess', rows: 2,
+      placeholder: 'e.g. Individuals can request corrections in writing. We will respond within 30 days and make corrections where we agree the information is inaccurate.',
+      hint: 'APP 13 gives individuals the right to request correction of inaccurate information.'
+    })}
+
+    ${field('s5-period', 'How long will you keep the personal information?', 'text', {
+      bind: 'access.period',
+      placeholder: 'e.g. 7 years after the end of the employment relationship, or as required by law',
+      hint: 'APP 11.2 requires you to destroy or de-identify personal information when it is no longer needed for any purpose for which it may be used or disclosed.'
+    })}
+    ${field('s5-disposal', 'How will you dispose of the information when it is no longer needed?', 'select', {
+      bind: 'access.disposalMethod', options: disposalOpts
+    })}
+    ${field('s5-authority', 'What policy or rule tells you how long to keep it?', 'text', {
+      bind: 'access.disposalAuthority',
+      placeholder: 'e.g. Archives Act 1983, your organisation\'s records retention schedule',
+      hint: 'This might be a law, a departmental policy, or your organisation\'s records retention schedule.'
+    })}
+  `;
+}
+
+function buildStep6() {
+  const items = state.risks.items || {};
+  const riskCards = RISK_ITEMS.map(r => {
+    const checked = items[r.key]?.checked || false;
+    const mit = escapeHtml(items[r.key]?.mitigation || '');
+    return `
+      <div class="border border-slate-200 rounded-lg overflow-hidden" id="rcard-${r.key}">
+        <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-slate-50 select-none">
+          <input type="checkbox" id="risk-${r.key}" ${checked ? 'checked' : ''} onchange="toggleRisk('${r.key}')" class="mt-0.5 accent-emerald-600 w-4 h-4 flex-shrink-0">
+          <div>
+            <p class="font-medium text-slate-800 text-sm leading-snug">${escapeHtml(r.label)}</p>
+            <p class="text-xs text-slate-400 mt-0.5">${escapeHtml(r.example)}</p>
+          </div>
+        </label>
+        <div id="mit-${r.key}" class="${checked ? '' : 'hidden'} bg-emerald-50 px-4 pb-4">
+          <label class="block text-sm font-medium text-emerald-700 mb-1">What will you do to manage this risk?</label>
+          <p class="text-xs text-emerald-400 mb-2">Click suggestions to add them, or type your own response.</p>
+          <div class="flex flex-wrap gap-1.5 mb-2">${(r.suggestions || []).map(s => `<button type="button" onclick="addSuggestion('${r.key}', this)" class="text-xs bg-white border border-emerald-200 text-emerald-700 px-2 py-1 rounded-full hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer">${escapeHtml(s)}</button>`).join('')}</div>
+          <textarea id="mitigation-${r.key}" rows="2" placeholder="Describe the steps you will take to prevent or reduce this risk..." class="w-full border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-y">${mit}</textarea>
+        </div>
+      </div>`;
+  }).join('');
+
+  const otherChecked = items.other?.checked || false;
+  const otherDesc = escapeHtml(items.other?.description || '');
+  const otherMit = escapeHtml(items.other?.mitigation || '');
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Are There Any Privacy Risks?</h2>
+    <p class="text-slate-500 text-sm mb-2">Tick any risks that could happen in your project. For each risk you tick, briefly describe what you will do about it.</p>
+    <p class="text-xs text-slate-400 mb-5">It is okay if none of these apply — just leave them all unticked.</p>
+    <div class="space-y-3">
+      ${riskCards}
+      <div class="border border-slate-200 rounded-lg overflow-hidden" id="rcard-other">
+        <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-slate-50 select-none">
+          <input type="checkbox" id="risk-other" ${otherChecked ? 'checked' : ''} onchange="toggleRisk('other')" class="mt-0.5 accent-emerald-600 w-4 h-4 flex-shrink-0">
+          <div>
+            <p class="font-medium text-slate-800 text-sm">Other privacy risk not listed above</p>
+          </div>
+        </label>
+        <div id="mit-other" class="${otherChecked ? '' : 'hidden'} bg-emerald-50 px-4 pb-4">
+          <div class="mb-2">
+            <label class="block text-sm font-medium text-emerald-700 mb-1">Describe the risk</label>
+            <input id="risk-other-desc" type="text" value="${otherDesc}" placeholder="What is the risk?" class="w-full border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-emerald-700 mb-1">What will you do to manage this risk?</label>
+            <textarea id="risk-other-mit" rows="2" placeholder="Describe the steps you will take..." class="w-full border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-y">${otherMit}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildStep7() {
+  const act = state.actions;
+  const outcomeOpts = [
+    { value: 'approved', label: 'Assessment complete — approved to proceed' },
+    { value: 'approved-conditions', label: 'Assessment complete — approved to proceed with conditions' },
+    { value: 'further-review', label: 'Further review or consultation needed' },
+    { value: 'not-approved', label: 'Not approved to proceed' }
+  ];
+  const outcomeSelect = outcomeOpts.map(o =>
+    `<option value="${o.value}" ${act.outcome === o.value ? 'selected' : ''}>${o.label}</option>`
+  ).join('');
+
+  const identifiedRisks = RISK_ITEMS.filter(r => state.risks.items[r.key]?.checked).length +
+    (state.risks.items.other?.checked ? 1 : 0);
+  const riskSummary = identifiedRisks === 0
+    ? '<p class="text-sm text-slate-500 italic">No risks were identified in the previous step.</p>'
+    : `<p class="text-sm text-slate-600">You identified <strong>${identifiedRisks} risk${identifiedRisks !== 1 ? 's' : ''}</strong> in the previous step. Use the table below to record your actions, or click <strong>Pre-fill from risks</strong> to import them automatically.</p>`;
+
+  return `
+    <h2 class="text-xl font-bold text-slate-800 mb-1">Actions and Sign-off</h2>
+    <p class="text-slate-500 text-sm mb-5">Record any actions you will take to address the privacy risks, then sign off on the assessment.</p>
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <p class="${labelCls} mb-0">Actions to address privacy risks</p>
+        <button onclick="prePopulateActions()" class="text-xs text-emerald-600 hover:text-emerald-800 font-medium border border-emerald-300 px-2 py-1 rounded">Pre-fill from risks</button>
+      </div>
+      ${riskSummary}
+      <div id="actions-table-container" class="mt-3"></div>
+      <button onclick="addAction()" class="mt-2 text-sm text-emerald-600 hover:text-emerald-800 font-medium">+ Add action</button>
+    </div>
+    <div class="border-t pt-5 mt-5">
+      <h3 class="text-base font-semibold text-slate-800 mb-3">Sign-off</h3>
+      <div class="grid sm:grid-cols-2 gap-4">
+        ${field('s7-name', 'Your full name', 'text', { bind: 'actions.assessorName', placeholder: 'Full name' })}
+        ${field('s7-pos', 'Your position or role', 'text', { bind: 'actions.assessorPosition', placeholder: 'e.g. Privacy Officer' })}
+      </div>
+      ${field('s7-date', 'Date', 'date', { bind: 'actions.assessorDate' })}
+      ${field('s7-sig', 'Signature (type your full name as your electronic signature)', 'text', {
+        bind: 'actions.assessorSignature',
+        placeholder: 'Type your full name',
+        hint: 'By typing your name you confirm this assessment is complete and accurate to the best of your knowledge.'
+      })}
+      <div class="mb-4">
+        <label class="${labelCls}">Assessment outcome</label>
+        <select id="s7-outcome" data-bind="actions.outcome" class="${inputCls}">
+          ${outcomeSelect}
+        </select>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-3 mt-6 pt-5 border-t">
+      <button onclick="showPreview()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition-colors">Preview Report</button>
+      <button onclick="exportPDF()" class="px-5 py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg text-sm font-semibold transition-colors">Download PDF</button>
+      <button onclick="exportJSON()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition-colors">Export data</button>
+    </div>
+  `;
+}
+
+// ============================================================
+// WIZARD INIT & NAVIGATION
+// ============================================================
+const STEP_BUILDERS = [buildStep0, buildStep1, buildStep2, buildStep3, buildStep4, buildStep5, buildStep6, buildStep7];
+
+function buildWizardSteps() {
+  const container = document.getElementById('wizard-container');
+  container.innerHTML = STEP_BUILDERS.map((fn, i) =>
+    `<div class="wizard-step ${i === 0 ? 'active' : ''}" id="step-${i}"></div>`
+  ).join('');
+}
+
+function renderStep(index) {
+  const el = document.getElementById(`step-${index}`);
+  if (!el) return;
+  el.innerHTML = STEP_BUILDERS[index]();
+  if (index === 7) renderActionsTable();
+  el.querySelectorAll('input, textarea, select').forEach(inp => {
+    inp.addEventListener('input', debounceSave);
+    inp.addEventListener('change', debounceSave);
+  });
+}
+
+function navigateTo(stepIndex) {
+  if (stepIndex < 0 || stepIndex >= STEP_BUILDERS.length) return;
+  collectCurrentStepData();
+  saveState();
+  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+  state.currentStep = stepIndex;
+  renderStep(stepIndex);
+  document.getElementById(`step-${stepIndex}`).classList.add('active');
+  updateProgressBar(stepIndex);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.getElementById('btn-prev').style.visibility = stepIndex === 0 ? 'hidden' : 'visible';
+  const isLast = stepIndex === STEP_BUILDERS.length - 1;
+  document.getElementById('btn-next').style.display = isLast ? 'none' : 'inline-flex';
+}
+
+function nextStep() { navigateTo(state.currentStep + 1); }
+function prevStep() { navigateTo(state.currentStep - 1); }
+
+function updateProgressBar(step) {
+  const pct = ((step + 1) / STEP_BUILDERS.length * 100).toFixed(1);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('step-label').textContent = `Step ${step + 1} of ${STEP_BUILDERS.length}`;
+  document.getElementById('step-name-label').textContent = STEP_NAMES[step];
+}
+
+// ============================================================
+// DATA COLLECTION
+// ============================================================
+function collectCurrentStepData() {
+  const step = state.currentStep;
+  const el = document.getElementById(`step-${step}`);
+  if (!el) return;
+
+  el.querySelectorAll('[data-bind]').forEach(input => {
+    setNestedValue(state, input.dataset.bind, input.value);
+  });
+
+  const arrayPaths = new Set(Array.from(el.querySelectorAll('[data-array]')).map(e => e.dataset.array));
+  arrayPaths.forEach(path => {
+    const arr = [];
+    el.querySelectorAll(`[data-array="${path}"]:checked`).forEach(cb => arr.push(cb.dataset.value));
+    setNestedValue(state, path, arr);
+  });
+
+  el.querySelectorAll('input[type=radio]:checked').forEach(r => {
+    if (r.name === 'sensitiveInfo') state.personalInfo.sensitiveInfo = r.value;
+    if (r.name === 'anonymousOption') state.personalInfo.anonymousOption = r.value;
+    if (r.name === 'collectionMethod') state.collection.method = r.value;
+    if (r.name === 'notified') state.collection.notified = r.value;
+    if (r.name === 'originalPurpose') state.disclosure.originalPurpose = r.value;
+    // Capture APP 6 basis select
+    const app6Select = document.querySelector('select[data-bind="disclosure.app6Basis"]');
+    if (app6Select) {
+      state.disclosure.app6Basis = app6Select.value;
+      const app6Other = document.getElementById('app6-other-section');
+      if (app6Other) app6Other.classList.toggle('hidden', app6Select.value !== 'Other');
+    }
+    if (r.name === 'sharedOutside') state.disclosure.sharedOutside = r.value;
+    if (r.name === 'crossBorder') state.disclosure.crossBorder = r.value;
+    if (r.name === 'directMarketing') state.disclosure.directMarketing = r.value;
+    if (r.name === 'govIdentifiers') state.disclosure.govIdentifiers = r.value;
+  });
+
+  // Capture legal basis select (now on step 3)
+  const legalSelect = document.querySelector('select[data-bind="collection.legalBasis"]');
+  if (legalSelect) {
+    const legalOther = document.getElementById('legal-other-section');
+    if (legalOther) legalOther.classList.toggle('hidden', legalSelect.value !== 'Other');
+  }
+
+  // Capture APP 9 basis select
+  const app9Select = document.querySelector('select[data-bind="disclosure.govIdentifiersApp9Basis"]');
+  if (app9Select) {
+    state.disclosure.govIdentifiersApp9Basis = app9Select.value;
+    const otherSec = document.getElementById('gov-identifiers-other-section');
+    if (otherSec) otherSec.classList.toggle('hidden', app9Select.value !== 'Other');
+  }
+
+  if (step === 6) {
+    if (!state.risks.items) state.risks.items = getDefaultRiskItems();
+    RISK_ITEMS.forEach(r => {
+      const cb = document.getElementById(`risk-${r.key}`);
+      const mit = document.getElementById(`mitigation-${r.key}`);
+      if (cb) state.risks.items[r.key] = { checked: cb.checked, mitigation: mit ? mit.value : '' };
+    });
+    const otherCb = document.getElementById('risk-other');
+    const otherDesc = document.getElementById('risk-other-desc');
+    const otherMit = document.getElementById('risk-other-mit');
+    if (otherCb) state.risks.items.other = {
+      checked: otherCb.checked,
+      description: otherDesc ? otherDesc.value : '',
+      mitigation: otherMit ? otherMit.value : ''
+    };
+  }
+}
+
+// ============================================================
+// STEP-SPECIFIC INTERACTIONS
+// ============================================================
+function toggleNewPurpose(val) {
+  const newPurp = document.getElementById('new-purpose-section');
+  if (newPurp) newPurp.classList.toggle('hidden', val === 'yes');
+  const legalAuth = document.getElementById('legal-authority-section');
+  if (legalAuth) legalAuth.classList.toggle('hidden', val !== 'yes');
+}
+
+function toggleSharedOutside(val) {
+  const el = document.getElementById('shared-with-section');
+  if (el) el.classList.toggle('hidden', val !== 'yes');
+}
+
+function toggleCrossBorder(val) {
+  const el = document.getElementById('cross-border-section');
+  if (el) el.classList.toggle('hidden', val !== 'yes');
+}
+
+function toggleGovIdentifiers(val) {
+  const el = document.getElementById('gov-identifiers-section');
+  if (el) el.classList.toggle('hidden', val !== 'yes');
+}
+
+function toggleNotifiedMethod(val) {
+  const el = document.getElementById('notified-method-section');
+  if (el) el.classList.toggle('hidden', val !== 'yes' && val !== 'existing');
+}
+
+function toggleRisk(key) {
+  const cb = document.getElementById(`risk-${key}`);
+  const mit = document.getElementById(`mit-${key}`);
+  if (mit && cb) mit.classList.toggle('hidden', !cb.checked);
+}
+
+function addSuggestion(key, btn) {
+  const ta = document.getElementById(`mitigation-${key}`);
+  if (!ta) return;
+  const text = btn.textContent.trim();
+  const current = ta.value.trim();
+  if (current.includes(text)) return;
+  ta.value = current ? current + '\n' + text : text;
+  btn.classList.remove('bg-white', 'text-emerald-700', 'border-emerald-200');
+  btn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-600');
+  btn.disabled = true;
+}
+
+// ============================================================
+// DYNAMIC TABLES
+// ============================================================
+function renderActionsTable() {
+  const container = document.getElementById('actions-table-container');
+  if (!container) return;
+  const rows = state.actions.table || [];
+  container.innerHTML = `
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border-collapse border border-slate-200 rounded-lg overflow-hidden">
+        <thead>
+          <tr class="bg-slate-100 text-left">
+            <th class="border border-slate-200 px-3 py-2 font-medium">Risk</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">What will you do?</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">Who is responsible?</th>
+            <th class="border border-slate-200 px-3 py-2 font-medium">By when?</th>
+            <th class="border border-slate-200 px-3 py-2 w-10"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, i) => `
+            <tr>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.risk)}" placeholder="Risk description" onchange="state.actions.table[${i}].risk=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.action)}" placeholder="Action to take" onchange="state.actions.table[${i}].action=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.who)}" placeholder="Name / role" onchange="state.actions.table[${i}].who=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1"><input type="date" class="w-full px-2 py-1 text-sm outline-none bg-transparent" value="${escapeHtml(row.byWhen)}" onchange="state.actions.table[${i}].byWhen=this.value;saveState()"></td>
+              <td class="border border-slate-200 p-1 text-center">
+                <button onclick="removeAction(${i})" class="text-red-400 hover:text-red-600 text-lg leading-none" ${rows.length===1?'disabled':''}>✕</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function addAction() {
+  collectCurrentStepData();
+  state.actions.table.push({ risk: '', action: '', who: '', byWhen: '' });
+  renderActionsTable();
+  saveState();
+}
+
+function removeAction(i) {
+  if (state.actions.table.length > 1) {
+    collectCurrentStepData();
+    state.actions.table.splice(i, 1);
+    renderActionsTable();
+    saveState();
+  }
+}
+
+function prePopulateActions() {
+  collectCurrentStepData();
+  const table = [];
+  RISK_ITEMS.forEach(r => {
+    if (state.risks.items[r.key]?.checked) {
+      table.push({ risk: r.label, action: state.risks.items[r.key].mitigation || '', who: '', byWhen: '' });
+    }
+  });
+  if (state.risks.items.other?.checked) {
+    table.push({ risk: state.risks.items.other.description || 'Other risk', action: state.risks.items.other.mitigation || '', who: '', byWhen: '' });
+  }
+  if (table.length === 0) {
+    alert('No risks were ticked in the previous step. Go back and tick the risks that apply first.');
+    return;
+  }
+  state.actions.table = table;
+  renderActionsTable();
+  saveState();
+}
+
+// ============================================================
+// REPORT / PDF
+// ============================================================
+function generateReportHTML() {
+  const p = state.project;
+  const pi = state.personalInfo;
+  const col = state.collection;
+  const dis = state.disclosure;
+  const sec = state.security;
+  const acc = state.access;
+  const risks = state.risks.items || {};
+  const act = state.actions;
+
+  const esc = s => escapeHtml(s);
+  const val = (v, fallback) => esc(v) || `<em style="color:#94a3b8">${fallback || 'Not provided'}</em>`;
+
+  const section = (num, title, content) => `
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:13px;font-weight:700;color:#059669;border-bottom:2px solid #a7f3d0;padding-bottom:5px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.04em;page-break-after:avoid;">${num}. ${title}</h2>
+      <div>${content}</div>
+    </div>`;
+
+  const row = (label, value) => `
+    <div style="display:flex;gap:12px;margin-bottom:7px;">
+      <span style="font-size:11px;color:#64748b;min-width:180px;max-width:180px;flex-shrink:0;">${label}</span>
+      <span style="font-size:12px;color:#1e293b;flex:1;overflow-wrap:break-word;word-break:break-word;">${val(value)}</span>
+    </div>`;
+
+  const typesList = (pi.types || []).length
+    ? (pi.types || []).map(t => `<li style="font-size:12px;margin-bottom:2px;">${esc(t)}</li>`).join('')
+    : `<li style="font-size:12px;color:#94a3b8;">None specified</li>`;
+
+  const controlsList = (sec.controls || []).length
+    ? (sec.controls || []).map(c => `<li style="font-size:12px;margin-bottom:2px;">${esc(c)}</li>`).join('')
+    : `<li style="font-size:12px;color:#94a3b8;">None selected</li>`;
+
+  const whoseMap = { customers:'Customers or clients', employees:'Employees or staff', contractors:'Contractors or volunteers', public:'Members of the public', children:'Children or young people (under 18)', other:'Other' };
+  const whoseLabel = (pi.whose || []).map(w => whoseMap[w] || w).join(', ') || '';
+
+  const sensitiveLabel = { yes:'Yes — sensitive information is involved', no:'No', 'not-sure':'Not sure' }[pi.sensitiveInfo] || pi.sensitiveInfo;
+  const anonLabel = { yes:'Yes', no:'No — identification required', partial:'Partially available' }[pi.anonymousOption] || pi.anonymousOption;
+  const methodLabel = { direct:'Directly from the individual', 'third-party':'From a third party', both:'Both directly and from third parties', existing:'Using existing records' }[col.method] || col.method;
+  const notifiedLabel = { yes:'Yes — via privacy notice or collection statement', existing:'Yes — covered by existing privacy policy', planned:'Not yet — will notify before collection', no:'No' }[col.notified] || col.notified;
+  const origPurpLabel = { yes:'Yes', partly:'Partly', no:'No' }[dis.originalPurpose] || dis.originalPurpose;
+
+  const riskRows = RISK_ITEMS.filter(r => risks[r.key]?.checked).map(r => `
+    <div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin-bottom:7px;">
+      <p style="font-weight:600;font-size:12px;margin-bottom:3px;">${esc(r.label)}</p>
+      <p style="font-size:11px;color:#64748b;">Action: ${val(risks[r.key]?.mitigation, 'No mitigation specified')}</p>
+    </div>`).join('');
+
+  const otherRisk = risks.other?.checked ? `
+    <div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin-bottom:7px;">
+      <p style="font-weight:600;font-size:12px;margin-bottom:3px;">${val(risks.other.description, 'Other risk')}</p>
+      <p style="font-size:11px;color:#64748b;">Action: ${val(risks.other.mitigation, 'No mitigation specified')}</p>
+    </div>` : '';
+
+  const actionsRows = (act.table || []).filter(a => a.risk || a.action).map(a => `
+    <tr>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.risk)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.action)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.who)}</td>
+      <td style="padding:5px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(a.byWhen)}</td>
+    </tr>`).join('');
+
+  const outcomeLabels = {
+    'approved': 'Assessment complete — approved to proceed',
+    'approved-conditions': 'Assessment complete — approved with conditions',
+    'further-review': 'Further review or consultation needed',
+    'not-approved': 'Not approved to proceed'
+  };
+
+  return `<div style="font-family:Arial,sans-serif;color:#1e293b;max-width:700px;margin:0 auto;">
+    <div style="text-align:center;padding:32px 0 24px;border-bottom:3px solid #059669;margin-bottom:28px;">
+      <p style="font-size:11px;color:#64748b;margin:0 0 6px;">Privacy Act 1988 (Cth) — Australian Privacy Principles</p>
+      <h1 style="font-size:22px;font-weight:700;color:#059669;margin:0 0 10px;">Short Privacy Assessment (Personal Information)</h1>
+      <p style="font-size:17px;font-weight:600;margin:0 0 6px;">${val(p.name, 'Untitled Project')}</p>
+      <p style="font-size:12px;color:#64748b;margin:0;">${esc(p.organisation)}${p.organisation && p.date ? ' &nbsp;|&nbsp; ' : ''}${esc(p.date)}</p>
+      <p style="font-size:12px;color:#64748b;margin:4px 0 0;">Prepared by: ${esc(p.lead)}</p>
+    </div>
+
+    ${section(1, 'About the Project', `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;">
+        ${row('Project name', p.name)}
+        ${row('Project lead', p.lead)}
+        ${row('Organisation / team', p.organisation)}
+        ${row('Date of assessment', p.date)}
+      </div>
+      <div style="margin-top:8px;">${row('Description', p.description)}</div>
+    `)}
+
+    ${section(2, 'Personal Information Involved (APP 3)', `
+      <p style="font-size:11px;color:#64748b;margin-bottom:4px;">Types of personal information:</p>
+      <ul style="margin:0 0 10px 16px;">${typesList}</ul>
+      ${row('Sensitive information involved?', sensitiveLabel)}
+      ${row('Whose information', whoseLabel)}
+      ${row('Approximate number of people', pi.numberOfPeople)}
+      ${row('Anonymous/pseudonymous option (APP 2)', anonLabel)}
+    `)}
+
+    ${section(3, 'Collection and Notification (APP 3, 5)', `
+      ${row('How collected', methodLabel)}
+      ${row('Purpose of collection', col.purpose)}
+      ${row('Individuals notified (APP 5)', notifiedLabel)}
+      ${col.notifiedMethod ? row('Notification method', col.notifiedMethod) : ''}
+    `)}
+
+    ${section(4, 'Use, Disclosure and Marketing (APP 6, 7, 8)', `
+      ${row('Used for original purpose? (APP 6)', origPurpLabel)}
+      ${dis.originalPurpose === 'yes' ? row('Legal basis (APP 3)', col.legalBasis) : ''}
+      ${dis.originalPurpose === 'yes' && col.legalBasisOther ? row('Legal basis (other)', col.legalBasisOther) : ''}
+      ${dis.originalPurpose !== 'yes' ? row('Secondary/different purpose', dis.newPurpose) : ''}
+      ${dis.originalPurpose !== 'yes' && dis.app6Basis ? row('APP 6 basis for secondary use', dis.app6Basis) : ''}
+      ${dis.originalPurpose !== 'yes' && dis.app6Basis === 'Other' && dis.app6BasisOther ? row('APP 6 basis (detail)', dis.app6BasisOther) : ''}
+      ${row('Disclosed to third parties?', dis.sharedOutside === 'yes' ? 'Yes' : 'No')}
+      ${dis.sharedOutside === 'yes' ? row('Disclosed to', dis.sharedWith) : ''}
+      ${row('Overseas disclosure? (APP 8)', dis.crossBorder === 'yes' ? 'Yes' : 'No')}
+      ${dis.crossBorder === 'yes' ? row('Cross-border details', dis.crossBorderDetails) : ''}
+      ${row('Used for direct marketing? (APP 7)', dis.directMarketing === 'yes' ? 'Yes' : 'No')}
+      ${row('Government identifiers used? (APP 9)', dis.govIdentifiers === 'yes' ? 'Yes' : 'No')}
+      ${dis.govIdentifiers === 'yes' && dis.govIdentifiersApp9Basis ? row('APP 9 basis', dis.govIdentifiersApp9Basis) : ''}
+      ${dis.govIdentifiers === 'yes' && dis.govIdentifiersApp9Basis === 'Other' && dis.govIdentifiersApp9Other ? row('APP 9 basis (detail)', dis.govIdentifiersApp9Other) : ''}
+    `)}
+
+    ${section(5, 'Security Measures (APP 11)', `
+      ${row('Where information is stored', sec.storedWhere)}
+      <p style="font-size:11px;color:#64748b;margin:8px 0 4px;">Security controls in place:</p>
+      <ul style="margin:0 0 8px 16px;">${controlsList}</ul>
+      ${row('Person responsible for security', sec.securityResponsible)}
+    `)}
+
+    ${section(6, 'Access, Correction and Quality (APP 10, 12, 13)', `
+      ${row('Accuracy measures (APP 10)', acc.accuracyMeasures)}
+      ${row('Access process (APP 12)', acc.accessProcess)}
+      ${row('Correction process (APP 13)', acc.correctionProcess)}
+      ${row('Retention period', acc.period)}
+      ${row('Disposal method', acc.disposalMethod)}
+      ${row('Retention policy / authority', acc.disposalAuthority)}
+    `)}
+
+    ${section(7, 'Privacy Risks and Mitigations', `
+      ${riskRows || '<p style="font-size:12px;color:#94a3b8;font-style:italic;">No risks identified.</p>'}
+      ${otherRisk}
+    `)}
+
+    ${section(8, 'Actions', `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;">
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Risk</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Action</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Who</th>
+          <th style="padding:5px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">By when</th>
+        </tr></thead>
+        <tbody>${actionsRows || '<tr><td colspan="4" style="padding:8px;text-align:center;color:#94a3b8;font-size:11px;">No actions listed</td></tr>'}</tbody>
+      </table>
+    `)}
+
+    ${section(9, 'Sign-off', `
+      ${row('Outcome', outcomeLabels[act.outcome] || act.outcome)}
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;width:50%;"><strong>Assessor</strong></td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;width:50%;"></td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Name</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(act.assessorName)}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Position</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(act.assessorPosition)}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Date</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">${esc(act.assessorDate)}</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;">Signature</td><td style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-style:italic;">${esc(act.assessorSignature)}</td></tr>
+      </table>
+    `)}
+  </div>`;
+}
+
+function showPreview() {
+  collectCurrentStepData();
+  saveState();
+  document.getElementById('report-content').innerHTML = generateReportHTML();
+  document.getElementById('report-preview-modal').classList.add('active');
+}
+
+function closePreview() {
+  document.getElementById('report-preview-modal').classList.remove('active');
+}
+
+function exportPDF() {
+  collectCurrentStepData();
+  saveState();
+  closePreview();
+  const html = generateReportHTML();
+  const projectName = state.project.name || 'Short-PIA-Personal';
+
+  // Insert report element at top of DOM so html2canvas captures from y=0
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  el.style.cssText = 'position:relative;width:794px;margin:0;padding:0;background:white;';
+  document.body.insertBefore(el, document.body.firstChild);
+
+  // Scroll to top so the element is within the viewport before capture
+  window.scrollTo(0, 0);
+
+  const opt = {
+    margin: 12,
+    filename: `Short-PIA-Personal-${projectName.replace(/[^a-z0-9]/gi, '-')}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 794,
+      // Exclude page chrome that visually overlaps the report element
+      ignoreElements: (node) =>
+        node.id === 'loading-overlay' ||
+        node.id === 'report-preview-modal' ||
+        node.tagName === 'HEADER'
+    },
+    pagebreak: { mode: ['css', 'legacy'] },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  document.getElementById('loading-overlay').style.display = 'flex';
+  html2pdf().set(opt).from(el).save().then(() => {
+    document.body.removeChild(el);
+    document.getElementById('loading-overlay').style.display = 'none';
+  });
+}
+
+function exportJSON() {
+  collectCurrentStepData();
+  saveState();
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Short-PIA-Personal-${(state.project.name || 'export').replace(/[^a-z0-9]/gi, '-')}.json`;
+  a.click();
+}
+
+function resetForm() {
+  if (!confirm('Are you sure you want to clear all your answers and start again?')) return;
+  if (!confirm('This cannot be undone. All your data will be deleted.')) return;
+  localStorage.removeItem(APP_KEY);
+  state = getDefaultState();
+  navigateTo(0);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function initApp() {
+  const saved = loadState();
+  if (saved) {
+    state = getDefaultState();
+    Object.assign(state, saved);
+    if (!state.risks.items) state.risks.items = getDefaultRiskItems();
+    RISK_ITEMS.forEach(r => { if (!state.risks.items[r.key]) state.risks.items[r.key] = { checked: false, mitigation: '' }; });
+    if (!state.risks.items.other) state.risks.items.other = { checked: false, description: '', mitigation: '' };
+    if (!state.actions.table || state.actions.table.length === 0) state.actions.table = [{ risk: '', action: '', who: '', byWhen: '' }];
+  } else {
+    state = getDefaultState();
+  }
+  buildWizardSteps();
+  navigateTo(state.currentStep || 0);
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>

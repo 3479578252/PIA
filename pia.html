@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Impact Assessment — Health Records Act 2001 (Vic)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#1e40af',
+        'primary-light': '#3b82f6',
+        secondary: '#0f766e',
+        danger: '#dc2626',
+        warning: '#f59e0b',
+        success: '#16a34a',
+      }
+    }
+  }
+}
+</script>
+<style>
+  .wizard-step { display: none; }
+  .wizard-step.active { display: block; }
+  .save-indicator { transition: opacity 0.3s ease; }
+  .progress-segment { transition: all 0.2s ease; cursor: pointer; }
+  .progress-segment:hover { transform: scaleY(1.3); }
+  .risk-low { background-color: #22c55e; color: white; }
+  .risk-medium { background-color: #f59e0b; color: white; }
+  .risk-high { background-color: #f97316; color: white; }
+  .risk-extreme { background-color: #dc2626; color: white; }
+  .compliance-compliant { background-color: #22c55e; color: white; }
+  .compliance-partial { background-color: #f59e0b; color: white; }
+  .compliance-non { background-color: #dc2626; color: white; }
+  .compliance-na { background-color: #9ca3af; color: white; }
+  #report-preview-modal { display: none; }
+  #report-preview-modal.active { display: flex; }
+  @media print {
+    #app-header, #progress-bar, #navigation-buttons { display: none !important; }
+    .wizard-step { display: block !important; page-break-after: always; }
+  }
+  .page-break-before { page-break-before: always; }
+  .guidance-panel { background: linear-gradient(135deg, #eff6ff, #e0e7ff); }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+<!-- Header -->
+<header id="app-header" class="bg-primary text-white shadow-lg sticky top-0 z-40">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="text-blue-200 hover:text-white text-xs flex-shrink-0">← Home</a>
+      <div>
+        <h1 class="text-lg font-bold">Privacy Impact Assessment</h1>
+        <p class="text-xs text-blue-200">Health Records Act 2001 (Vic)</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="save-indicator" class="save-indicator text-xs text-blue-200 opacity-0">Saved</span>
+      <button onclick="resetForm()" class="text-xs bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded" title="Reset all data">Reset</button>
+    </div>
+  </div>
+</header>
+
+<!-- Progress Bar -->
+<div id="progress-bar" class="bg-white border-b shadow-sm sticky top-[52px] z-30">
+  <div class="max-w-5xl mx-auto px-4 py-2">
+    <div id="progress-mobile" class="md:hidden text-sm text-slate-600 mb-1">
+      <span id="progress-mobile-text">Step 1 of 20</span>
+      <div class="w-full bg-slate-200 rounded-full h-1.5 mt-1">
+        <div id="progress-mobile-bar" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width:5%"></div>
+      </div>
+    </div>
+    <div id="progress-desktop" class="hidden md:flex gap-0.5 items-end" role="progressbar"></div>
+  </div>
+</div>
+
+<!-- Wizard Container -->
+<main class="max-w-5xl mx-auto px-4 py-6">
+  <div id="wizard-container"></div>
+</main>
+
+<!-- Navigation -->
+<div id="navigation-buttons" class="sticky bottom-0 bg-white border-t shadow-lg z-30">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+    <button id="btn-prev" onclick="prevStep()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors">Back</button>
+    <span id="step-label" class="text-sm text-slate-500 hidden md:inline"></span>
+    <button id="btn-next" onclick="nextStep()" class="px-5 py-2 bg-primary hover:bg-primary-light text-white rounded-lg font-medium transition-colors">Next</button>
+  </div>
+</div>
+
+<!-- Report Preview Modal -->
+<div id="report-preview-modal" class="fixed inset-0 z-50 bg-black/50 flex flex-col">
+  <div class="bg-white flex items-center justify-between px-4 py-2 shadow">
+    <h2 class="font-bold text-lg">Report Preview</h2>
+    <div class="flex gap-2">
+      <button onclick="exportPDF()" class="px-4 py-1.5 bg-primary text-white rounded text-sm hover:bg-primary-light">Download PDF</button>
+      <button onclick="closePreview()" class="px-4 py-1.5 bg-slate-200 text-slate-700 rounded text-sm hover:bg-slate-300">Close</button>
+    </div>
+  </div>
+  <div class="flex-1 overflow-y-auto bg-slate-100 p-4">
+    <div class="max-w-[210mm] mx-auto bg-white shadow-lg">
+      <div id="report-content" class="p-8"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center" style="display:none;">
+  <div class="bg-white rounded-lg px-8 py-6 shadow-xl text-center">
+    <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+    <p class="text-slate-700">Generating PDF...</p>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// APPLICATION STATE AND CONSTANTS
+// ============================================================
+const APP_KEY = 'pia-hra2001-vic';
+
+const STEP_NAMES = [
+  'Project Overview', 'Stakeholder Register', 'Consultation Log',
+  'Data Inventory', 'Data Flow Description',
+  'HPP 1 — Collection', 'HPP 2 — Use & Disclosure', 'HPP 3 — Data Quality',
+  'HPP 4 — Data Security', 'HPP 5 — Openness', 'HPP 6 — Access & Correction',
+  'HPP 7 — Unique Identifiers', 'HPP 8 — Anonymity', 'HPP 9 — Transborder Data Flows',
+  'HPP 10 — Transfer/Closure', 'HPP 11 — Info to Another Provider',
+  'Risk Assessment', 'Recommendations & Actions', 'Sign-off & Approval', 'Review & Export'
+];
+
+const STEP_GROUPS = [
+  { label: 'Setup', steps: [0,1,2], color: '#3b82f6' },
+  { label: 'Data', steps: [3,4], color: '#0d9488' },
+  { label: 'HPP Analysis', steps: [5,6,7,8,9,10,11,12,13,14,15], color: '#6366f1' },
+  { label: 'Assessment', steps: [16,17], color: '#f59e0b' },
+  { label: 'Finalise', steps: [18,19], color: '#16a34a' },
+];
+
+const HPP_DATA = [
+  {
+    number: 1, name: 'Collection', stateKey: 'hpp1',
+    guidance: 'An organisation must not collect health information about an individual unless the information is necessary for one or more of its functions or activities. It must collect health information only by lawful and fair means, and not in an unreasonably intrusive way. Where reasonable and practicable, it must collect health information about an individual only from that individual.',
+    requirements: [
+      'Information collected must be necessary for the organisation\'s functions or activities',
+      'Collection must be lawful, fair, and not unreasonably intrusive',
+      'Collect directly from the individual where reasonable and practicable',
+      'Provide a collection notice covering: identity, access rights, purpose, usual disclosures, legal requirements, consequences of not providing information'
+    ]
+  },
+  {
+    number: 2, name: 'Use and Disclosure', stateKey: 'hpp2',
+    guidance: 'An organisation must not use or disclose health information for a purpose other than the primary purpose of collection unless: the secondary purpose is directly related and reasonably expected; the individual has consented; it is necessary to lessen or prevent a serious threat; it is required by law; it is necessary for research under specified conditions; or it is reasonably necessary for law enforcement.',
+    requirements: [
+      'Use and disclose only for the primary purpose of collection',
+      'Secondary use must be directly related and reasonably expected',
+      'Document all lawful bases for secondary use or disclosure',
+      'Ensure consent is informed and voluntary where relied upon'
+    ]
+  },
+  {
+    number: 3, name: 'Data Quality', stateKey: 'hpp3',
+    guidance: 'An organisation must take reasonable steps to make sure that the health information it collects, uses or discloses is accurate, complete, up-to-date, and relevant, having regard to the purpose for which it is used.',
+    requirements: [
+      'Ensure data accuracy at the point of collection',
+      'Maintain processes to keep information current and up-to-date',
+      'Verify completeness relative to the purpose of use',
+      'Do not retain information beyond what is relevant to the purpose'
+    ]
+  },
+  {
+    number: 4, name: 'Data Security and Retention', stateKey: 'hpp4',
+    guidance: 'An organisation must take reasonable steps to protect health information from misuse, loss, unauthorised access, modification or disclosure. It must destroy or permanently de-identify health information no longer needed for any permitted purpose, unless retention is required or authorised by law.',
+    requirements: [
+      'Implement appropriate technical and organisational security measures',
+      'Protect against misuse, loss, unauthorised access, modification, and disclosure',
+      'Destroy or permanently de-identify information when no longer needed',
+      'Comply with applicable retention periods required by law'
+    ]
+  },
+  {
+    number: 5, name: 'Openness', stateKey: 'hpp5',
+    guidance: 'An organisation must document clearly expressed policies on its management of health information and make them available to anyone who asks. On request, it must take reasonable steps to let an individual know what health information it holds, for what purposes, and how it collects, holds, uses and discloses that information.',
+    requirements: [
+      'Maintain a documented health information management policy',
+      'Make privacy policies available to anyone on request',
+      'Be transparent about information handling practices',
+      'Provide clear, accessible privacy notices'
+    ]
+  },
+  {
+    number: 6, name: 'Access and Correction', stateKey: 'hpp6',
+    guidance: 'An individual has a right to access health information held about them. The organisation must provide access unless a specific exception applies. If information is inaccurate, incomplete, misleading or not up-to-date, the organisation must correct it. The organisation must respond within 45 days.',
+    requirements: [
+      'Provide access to health information on request',
+      'Respond within 45 days',
+      'Correct inaccurate, incomplete, misleading, or out-of-date information',
+      'Associate a statement of claimed correction where there is a dispute',
+      'Document and apply access exceptions transparently'
+    ]
+  },
+  {
+    number: 7, name: 'Unique Identifiers', stateKey: 'hpp7',
+    guidance: 'An organisation must not assign a unique identifier unless reasonably necessary for efficient operations. It must not adopt another organisation\'s identifier as its own, and must not use or disclose identifiers assigned by another organisation except in limited circumstances.',
+    requirements: [
+      'Only assign unique identifiers where reasonably necessary',
+      'Do not adopt another organisation\'s identifier as your own',
+      'Restrict the use and disclosure of unique identifiers',
+      'Consider privacy implications of identifier-based data matching'
+    ]
+  },
+  {
+    number: 8, name: 'Anonymity', stateKey: 'hpp8',
+    guidance: 'Where it is lawful and practicable, individuals must have the option of not identifying themselves when entering transactions with an organisation.',
+    requirements: [
+      'Offer anonymity or pseudonymity where lawful and practicable',
+      'Assess which transactions genuinely require identification',
+      'Document where anonymity is not feasible and the reasons why'
+    ]
+  },
+  {
+    number: 9, name: 'Transborder Data Flows', stateKey: 'hpp9',
+    guidance: 'An organisation in Victoria must not transfer health information outside Victoria unless: the recipient is subject to substantially similar protections; the individual has given informed consent; the transfer is necessary for contract performance; the organisation believes it is necessary to lessen a serious threat; or the organisation has taken reasonable steps to ensure consistent handling.',
+    requirements: [
+      'Do not transfer health information outside Victoria without a lawful basis',
+      'Assess whether the recipient jurisdiction has substantially similar protections',
+      'Obtain informed consent or establish contractual safeguards where needed',
+      'Document all cross-border transfers and the legal basis for each'
+    ]
+  },
+  {
+    number: 10, name: 'Transfer or Closure of Practice', stateKey: 'hpp10',
+    guidance: 'If a health service provider intends to close, sell, or transfer their practice, they must take reasonable steps to notify affected individuals at least 30 days before, by public notice and where practicable, direct notice. The provider must ensure continued safe custody and management of health information after the transfer or closure.',
+    requirements: [
+      'Assess whether the project involves transfer or closure of a health service',
+      'Plan for notification to patients/clients (minimum 30 days notice)',
+      'Ensure safe custody and access arrangements for records after transfer or closure',
+      'Document custody arrangements and access procedures'
+    ]
+  },
+  {
+    number: 11, name: 'Making Information Available to Another Provider', stateKey: 'hpp11',
+    guidance: 'On request of an individual, a health service provider must provide a copy or written summary of health information to another provider nominated by the individual. The provider must comply as soon as practicable and may charge a fee not exceeding the prescribed maximum.',
+    requirements: [
+      'Provide health information to another nominated provider upon individual request',
+      'Comply as soon as practicable',
+      'Fee must not exceed the prescribed maximum',
+      'Ensure secure transfer to the nominated provider'
+    ]
+  }
+];
+
+// ============================================================
+// DEFAULT STATE
+// ============================================================
+function getDefaultState() {
+  const hppAnalysis = {};
+  HPP_DATA.forEach(h => {
+    hppAnalysis[h.stateKey] = {
+      complianceStatus: '', currentPractices: '', gaps: '',
+      recommendations: '', priority: '', responsiblePerson: '', targetDate: '', notes: ''
+    };
+  });
+  return {
+    currentStep: 0,
+    lastSaved: null,
+    projectOverview: {
+      projectName: '', projectId: '', description: '', sponsor: '',
+      manager: '', organisation: '', businessUnit: '',
+      assessmentDate: new Date().toISOString().split('T')[0], version: '1.0', status: 'Draft'
+    },
+    stakeholders: [{ name: '', role: '', organisation: '', interest: '', contact: '' }],
+    consultations: [{ date: '', stakeholder: '', method: '', topics: '', outcomes: '' }],
+    dataInventory: {
+      dataElements: [{ element: '', description: '', source: '', legalBasis: '', sensitivity: '' }],
+      usage: '', storage: '', storageFormat: '', retentionPeriod: '',
+      access: '', disclosure: '', deIdentified: ''
+    },
+    dataFlow: {
+      narrative: '', collectionPoints: '', processingSteps: '',
+      storageLocations: '', disclosurePoints: '', disposalProcess: ''
+    },
+    hppAnalysis,
+    risks: [{ description: '', relatedHpp: '', likelihood: '', consequence: '', existingControls: '', mitigation: '', residualRisk: '', riskOwner: '', targetDate: '' }],
+    actions: [{ recommendation: '', source: '', priority: '', responsible: '', targetDate: '', status: 'Not Started', notes: '' }],
+    signOff: {
+      assessor: { name: '', position: '', organisation: '', date: '', signature: '', comments: '' },
+      reviewer: { name: '', position: '', organisation: '', date: '', signature: '', comments: '' },
+      approver: { name: '', position: '', organisation: '', date: '', signature: '', comments: '' },
+      outcome: '', conditions: '', nextReviewDate: ''
+    }
+  };
+}
+
+let state = getDefaultState();
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function saveState() {
+  try {
+    localStorage.setItem(APP_KEY, JSON.stringify({ version: 1, savedAt: new Date().toISOString(), state }));
+    const ind = document.getElementById('save-indicator');
+    ind.textContent = 'Saved ' + new Date().toLocaleTimeString();
+    ind.style.opacity = '1';
+    setTimeout(() => { ind.style.opacity = '0.6'; }, 2000);
+  } catch (e) { console.error('Save failed:', e); }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(APP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.state || null;
+  } catch (e) { return null; }
+}
+
+// ============================================================
+// WIZARD STEP HTML GENERATION
+// ============================================================
+function buildWizardSteps() {
+  const container = document.getElementById('wizard-container');
+  container.innerHTML = '';
+
+  // Step 0: Project Overview
+  container.appendChild(createStep(0, 'Project Overview', `
+    <p class="text-slate-600 mb-4">Provide general information about the project or initiative being assessed.</p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div><label class="block text-sm font-medium mb-1">Project Name *</label><input type="text" data-field="projectOverview.projectName" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Project ID / Reference</label><input type="text" data-field="projectOverview.projectId" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="e.g. PIA-2026-001"></div>
+      <div class="md:col-span-2"><label class="block text-sm font-medium mb-1">Project Description</label><textarea data-field="projectOverview.description" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="Describe the project, its objectives, and scope..."></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Project Sponsor</label><input type="text" data-field="projectOverview.sponsor" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Project Manager</label><input type="text" data-field="projectOverview.manager" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Organisation</label><input type="text" data-field="projectOverview.organisation" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Business Unit / Division</label><input type="text" data-field="projectOverview.businessUnit" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Date of Assessment</label><input type="date" data-field="projectOverview.assessmentDate" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Version</label><input type="text" data-field="projectOverview.version" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+      <div><label class="block text-sm font-medium mb-1">Status</label>
+        <select data-field="projectOverview.status" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+          <option value="Draft">Draft</option><option value="In Progress">In Progress</option><option value="Under Review">Under Review</option><option value="Final">Final</option>
+        </select>
+      </div>
+    </div>
+  `));
+
+  // Step 1: Stakeholder Register
+  container.appendChild(createStep(1, 'Stakeholder Register', `
+    <p class="text-slate-600 mb-4">Identify all stakeholders involved in or affected by this project, including their role and interest in the PIA process.</p>
+    <div id="stakeholders-table" class="overflow-x-auto"></div>
+    <button onclick="addRow('stakeholders', {name:'',role:'',organisation:'',interest:'',contact:''})" class="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light transition-colors">+ Add Stakeholder</button>
+  `));
+
+  // Step 2: Consultation Log
+  container.appendChild(createStep(2, 'Consultation Log', `
+    <p class="text-slate-600 mb-4">Record all consultations undertaken as part of this PIA, including meetings, correspondence, and workshops.</p>
+    <div id="consultations-table" class="overflow-x-auto"></div>
+    <button onclick="addRow('consultations', {date:'',stakeholder:'',method:'',topics:'',outcomes:''})" class="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light transition-colors">+ Add Consultation</button>
+  `));
+
+  // Step 3: Data Inventory
+  container.appendChild(createStep(3, 'Data Inventory', `
+    <p class="text-slate-600 mb-4">Document all health information that will be collected, used, stored, or disclosed. Under the Health Records Act 2001, 'health information' includes information about a person's physical, mental or psychological health, disability, or health service provision.</p>
+    <h3 class="font-semibold text-lg mb-2">A. Information Collected</h3>
+    <div id="dataElements-table" class="overflow-x-auto"></div>
+    <button onclick="addRow('dataInventory.dataElements', {element:'',description:'',source:'',legalBasis:'',sensitivity:''})" class="mt-3 mb-6 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light transition-colors">+ Add Data Element</button>
+    <h3 class="font-semibold text-lg mb-2">B. Use, Storage, and Disclosure</h3>
+    <div class="space-y-4">
+      <div><label class="block text-sm font-medium mb-1">How is information used?</label><textarea data-field="dataInventory.usage" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Where is information stored?</label><textarea data-field="dataInventory.storage" rows="2" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Storage format</label>
+        <select data-field="dataInventory.storageFormat" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+          <option value="">Select...</option><option value="Electronic">Electronic</option><option value="Paper">Paper</option><option value="Both">Both</option>
+        </select>
+      </div>
+      <div><label class="block text-sm font-medium mb-1">Retention period</label><input type="text" data-field="dataInventory.retentionPeriod" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="e.g. 7 years from last contact"></div>
+      <div><label class="block text-sm font-medium mb-1">Who has access?</label><textarea data-field="dataInventory.access" rows="2" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Who is it disclosed to?</label><textarea data-field="dataInventory.disclosure" rows="2" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">De-identified before disclosure?</label>
+        <select data-field="dataInventory.deIdentified" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+          <option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option><option value="Partially">Partially</option><option value="N/A">N/A</option>
+        </select>
+      </div>
+    </div>
+  `));
+
+  // Step 4: Data Flow Description
+  container.appendChild(createStep(4, 'Data Flow Description', `
+    <p class="text-slate-600 mb-4">Describe how health information flows through the project from collection to eventual disposal. A supplementary visual diagram is recommended but describe the flow textually here.</p>
+    <div class="space-y-4">
+      <div><label class="block text-sm font-medium mb-1">Data flow narrative</label><textarea data-field="dataFlow.narrative" rows="6" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="Describe the end-to-end flow of health information..."></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Collection points</label><textarea data-field="dataFlow.collectionPoints" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Processing steps</label><textarea data-field="dataFlow.processingSteps" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Storage locations</label><textarea data-field="dataFlow.storageLocations" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Disclosure / sharing points</label><textarea data-field="dataFlow.disclosurePoints" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Disposal / archival process</label><textarea data-field="dataFlow.disposalProcess" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+    </div>
+  `));
+
+  // Steps 5-15: HPP Analysis
+  HPP_DATA.forEach((hpp, i) => {
+    const stepIdx = 5 + i;
+    container.appendChild(createStep(stepIdx, `HPP ${hpp.number} — ${hpp.name}`, `
+      <div class="guidance-panel rounded-lg p-4 mb-6 border border-indigo-200">
+        <h4 class="font-semibold text-indigo-800 mb-2">What this principle requires</h4>
+        <p class="text-sm text-indigo-900 mb-2">${hpp.guidance}</p>
+        <h5 class="font-medium text-indigo-800 text-sm mt-3 mb-1">Key requirements:</h5>
+        <ul class="list-disc list-inside text-sm text-indigo-900 space-y-1">
+          ${hpp.requirements.map(r => `<li>${r}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Compliance Status</label>
+          <select data-field="hppAnalysis.${hpp.stateKey}.complianceStatus" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+            <option value="">Select...</option><option value="Compliant">Compliant</option><option value="Partially Compliant">Partially Compliant</option><option value="Non-Compliant">Non-Compliant</option><option value="Not Applicable">Not Applicable</option>
+          </select>
+        </div>
+        <div><label class="block text-sm font-medium mb-1">Current Practices</label><textarea data-field="hppAnalysis.${hpp.stateKey}.currentPractices" rows="4" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="Describe how your project currently addresses this principle..."></textarea></div>
+        <div><label class="block text-sm font-medium mb-1">Gaps Identified</label><textarea data-field="hppAnalysis.${hpp.stateKey}.gaps" rows="4" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="Identify any gaps between current practices and requirements..."></textarea></div>
+        <div><label class="block text-sm font-medium mb-1">Recommended Actions</label><textarea data-field="hppAnalysis.${hpp.stateKey}.recommendations" rows="4" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="What actions are needed to close identified gaps?"></textarea></div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div><label class="block text-sm font-medium mb-1">Priority</label>
+            <select data-field="hppAnalysis.${hpp.stateKey}.priority" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none">
+              <option value="">Select...</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+            </select>
+          </div>
+          <div><label class="block text-sm font-medium mb-1">Responsible Person / Team</label><input type="text" data-field="hppAnalysis.${hpp.stateKey}.responsiblePerson" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+          <div><label class="block text-sm font-medium mb-1">Target Date</label><input type="date" data-field="hppAnalysis.${hpp.stateKey}.targetDate" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+        </div>
+        <div><label class="block text-sm font-medium mb-1">Notes</label><textarea data-field="hppAnalysis.${hpp.stateKey}.notes" rows="2" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      </div>
+    `));
+  });
+
+  // Step 16: Risk Assessment
+  container.appendChild(createStep(16, 'Risk Assessment', `
+    <p class="text-slate-600 mb-4">Identify and assess privacy risks associated with this project.</p>
+    <div class="mb-6 overflow-x-auto">
+      <h4 class="font-semibold mb-2">Risk Matrix Reference</h4>
+      <table class="text-xs border-collapse w-full min-w-[500px]">
+        <thead><tr><th class="border p-1 bg-slate-100"></th><th class="border p-1 bg-slate-100">Negligible</th><th class="border p-1 bg-slate-100">Minor</th><th class="border p-1 bg-slate-100">Moderate</th><th class="border p-1 bg-slate-100">Major</th><th class="border p-1 bg-slate-100">Severe</th></tr></thead>
+        <tbody>
+          <tr><td class="border p-1 font-medium bg-slate-50">Almost Certain</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-high text-center">High</td><td class="border p-1 risk-high text-center">High</td><td class="border p-1 risk-extreme text-center">Extreme</td><td class="border p-1 risk-extreme text-center">Extreme</td></tr>
+          <tr><td class="border p-1 font-medium bg-slate-50">Likely</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-high text-center">High</td><td class="border p-1 risk-high text-center">High</td><td class="border p-1 risk-extreme text-center">Extreme</td></tr>
+          <tr><td class="border p-1 font-medium bg-slate-50">Possible</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-high text-center">High</td><td class="border p-1 risk-high text-center">High</td></tr>
+          <tr><td class="border p-1 font-medium bg-slate-50">Unlikely</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-high text-center">High</td></tr>
+          <tr><td class="border p-1 font-medium bg-slate-50">Rare</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-low text-center">Low</td><td class="border p-1 risk-medium text-center">Medium</td><td class="border p-1 risk-medium text-center">Medium</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="risks-table" class="overflow-x-auto"></div>
+    <button onclick="addRow('risks', {description:'',relatedHpp:'',likelihood:'',consequence:'',existingControls:'',mitigation:'',residualRisk:'',riskOwner:'',targetDate:''})" class="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light transition-colors">+ Add Risk</button>
+    <div id="risk-summary" class="mt-4 p-4 bg-slate-50 rounded-lg border"></div>
+  `));
+
+  // Step 17: Recommendations & Actions
+  container.appendChild(createStep(17, 'Recommendations & Action Items', `
+    <p class="text-slate-600 mb-4">Consolidate all recommended actions from the HPP analysis and risk assessment into a prioritised action plan.</p>
+    <button onclick="importFromHPP()" class="mb-4 px-4 py-2 bg-secondary text-white rounded-lg text-sm hover:opacity-90 transition-opacity">Import from HPP Analysis</button>
+    <div id="actions-table" class="overflow-x-auto"></div>
+    <button onclick="addRow('actions', {recommendation:'',source:'',priority:'',responsible:'',targetDate:'',status:'Not Started',notes:''})" class="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary-light transition-colors">+ Add Action Item</button>
+  `));
+
+  // Step 18: Sign-off & Approval
+  container.appendChild(createStep(18, 'Sign-off & Approval', `
+    <p class="text-slate-600 mb-4">Record formal sign-off for this Privacy Impact Assessment.</p>
+    ${['assessor', 'reviewer', 'approver'].map(role => `
+    <div class="border rounded-lg p-4 mb-4">
+      <h3 class="font-semibold text-lg mb-3 capitalize">${role}</h3>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium mb-1">Name</label><input type="text" data-field="signOff.${role}.name" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+        <div><label class="block text-sm font-medium mb-1">Position / Title</label><input type="text" data-field="signOff.${role}.position" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+        <div><label class="block text-sm font-medium mb-1">Organisation</label><input type="text" data-field="signOff.${role}.organisation" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+        <div><label class="block text-sm font-medium mb-1">Date</label><input type="date" data-field="signOff.${role}.date" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+        <div><label class="block text-sm font-medium mb-1">Signature (typed name)</label><input type="text" data-field="signOff.${role}.signature" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+        <div><label class="block text-sm font-medium mb-1">Comments</label><textarea data-field="signOff.${role}.comments" rows="2" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      </div>
+    </div>`).join('')}
+    <div class="border rounded-lg p-4 space-y-4">
+      <h3 class="font-semibold text-lg">Outcome</h3>
+      <div><label class="block text-sm font-medium mb-1">Overall PIA Outcome</label>
+        <select data-field="signOff.outcome" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none" onchange="document.getElementById('conditions-field').style.display = this.value === 'Approved with Conditions' ? 'block' : 'none'">
+          <option value="">Select...</option><option value="Approved">Approved</option><option value="Approved with Conditions">Approved with Conditions</option><option value="Not Approved">Not Approved</option><option value="Requires Further Assessment">Requires Further Assessment</option>
+        </select>
+      </div>
+      <div id="conditions-field" style="display:none"><label class="block text-sm font-medium mb-1">Conditions</label><textarea data-field="signOff.conditions" rows="3" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></textarea></div>
+      <div><label class="block text-sm font-medium mb-1">Next Review Date</label><input type="date" data-field="signOff.nextReviewDate" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary outline-none"></div>
+    </div>
+  `));
+
+  // Step 19: Review & Export
+  container.appendChild(createStep(19, 'Review & Export', `
+    <div id="review-dashboard" class="mb-6"></div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <button onclick="showPreview()" class="px-4 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-light transition-colors">Preview Full Report</button>
+      <button onclick="exportPDF()" class="px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-500 transition-colors">Download PDF</button>
+      <button onclick="exportJSON()" class="px-4 py-3 bg-secondary text-white rounded-lg font-medium hover:opacity-90 transition-opacity">Export JSON Backup</button>
+      <button onclick="document.getElementById('import-json').click()" class="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition-colors">Import JSON</button>
+      <input type="file" id="import-json" accept=".json" style="display:none" onchange="importJSON(event)">
+      <button onclick="resetForm()" class="px-4 py-3 bg-danger text-white rounded-lg font-medium hover:opacity-90 transition-opacity">Reset All Data</button>
+    </div>
+  `));
+}
+
+function createStep(index, title, content) {
+  const div = document.createElement('div');
+  div.className = 'wizard-step';
+  div.id = `step-${index}`;
+  div.setAttribute('data-step', index);
+  div.innerHTML = `<h2 class="text-2xl font-bold text-slate-800 mb-4" tabindex="-1">${title}</h2>${content}`;
+  return div;
+}
+
+// ============================================================
+// PROGRESS BAR
+// ============================================================
+function buildProgressBar() {
+  const desktop = document.getElementById('progress-desktop');
+  desktop.innerHTML = '';
+  STEP_GROUPS.forEach(group => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'flex flex-col items-center';
+    const label = document.createElement('span');
+    label.className = 'text-[10px] text-slate-500 mb-0.5';
+    label.textContent = group.label;
+    groupDiv.appendChild(label);
+    const segs = document.createElement('div');
+    segs.className = 'flex gap-0.5';
+    group.steps.forEach(s => {
+      const seg = document.createElement('div');
+      seg.className = 'progress-segment w-3 h-5 rounded-sm';
+      seg.style.backgroundColor = '#e2e8f0';
+      seg.title = STEP_NAMES[s];
+      seg.setAttribute('data-step-idx', s);
+      seg.onclick = () => navigateTo(s);
+      segs.appendChild(seg);
+    });
+    groupDiv.appendChild(segs);
+    desktop.appendChild(groupDiv);
+    // spacer between groups
+    const spacer = document.createElement('div');
+    spacer.className = 'w-1';
+    desktop.appendChild(spacer);
+  });
+}
+
+function updateProgressBar() {
+  document.querySelectorAll('.progress-segment').forEach(seg => {
+    const idx = parseInt(seg.getAttribute('data-step-idx'));
+    const group = STEP_GROUPS.find(g => g.steps.includes(idx));
+    if (idx < state.currentStep) {
+      seg.style.backgroundColor = group.color;
+      seg.style.opacity = '0.7';
+    } else if (idx === state.currentStep) {
+      seg.style.backgroundColor = group.color;
+      seg.style.opacity = '1';
+      seg.style.boxShadow = '0 0 0 2px ' + group.color;
+    } else {
+      seg.style.backgroundColor = '#e2e8f0';
+      seg.style.opacity = '1';
+      seg.style.boxShadow = 'none';
+    }
+  });
+  // Mobile
+  document.getElementById('progress-mobile-text').textContent = `Step ${state.currentStep + 1} of 20 — ${STEP_NAMES[state.currentStep]}`;
+  document.getElementById('progress-mobile-bar').style.width = `${((state.currentStep + 1) / 20) * 100}%`;
+  // Step label
+  document.getElementById('step-label').textContent = `${state.currentStep + 1} / 20 — ${STEP_NAMES[state.currentStep]}`;
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function navigateTo(stepIndex) {
+  if (stepIndex < 0 || stepIndex >= 20) return;
+  collectCurrentStepData();
+  saveState();
+  document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById(`step-${stepIndex}`);
+  if (target) target.classList.add('active');
+  state.currentStep = stepIndex;
+  populateStep(stepIndex);
+  updateProgressBar();
+  updateNavButtons();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const heading = target?.querySelector('h2');
+  if (heading) heading.focus();
+}
+
+function nextStep() { navigateTo(state.currentStep + 1); }
+function prevStep() { navigateTo(state.currentStep - 1); }
+
+function updateNavButtons() {
+  document.getElementById('btn-prev').style.visibility = state.currentStep === 0 ? 'hidden' : 'visible';
+  const btnNext = document.getElementById('btn-next');
+  if (state.currentStep === 19) {
+    btnNext.style.visibility = 'hidden';
+  } else {
+    btnNext.style.visibility = 'visible';
+    btnNext.textContent = 'Next';
+  }
+}
+
+// ============================================================
+// DATA BINDING
+// ============================================================
+function setNestedValue(obj, path, value) {
+  const keys = path.split('.');
+  let current = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (current[keys[i]] === undefined) current[keys[i]] = {};
+    current = current[keys[i]];
+  }
+  current[keys[keys.length - 1]] = value;
+}
+
+function getNestedValue(obj, path) {
+  const keys = path.split('.');
+  let current = obj;
+  for (const key of keys) {
+    if (current === undefined || current === null) return '';
+    current = current[key];
+  }
+  return current ?? '';
+}
+
+function collectCurrentStepData() {
+  const step = document.querySelector('.wizard-step.active');
+  if (!step) return;
+  step.querySelectorAll('[data-field]').forEach(el => {
+    const field = el.getAttribute('data-field');
+    setNestedValue(state, field, el.value);
+  });
+  // Collect dynamic table data
+  collectDynamicTables();
+}
+
+function populateStep(stepIndex) {
+  const step = document.getElementById(`step-${stepIndex}`);
+  if (!step) return;
+  step.querySelectorAll('[data-field]').forEach(el => {
+    const field = el.getAttribute('data-field');
+    el.value = getNestedValue(state, field);
+  });
+  // Render dynamic tables
+  renderAllDynamicTables();
+  // Special: conditions visibility on sign-off step
+  if (stepIndex === 18) {
+    const cond = document.getElementById('conditions-field');
+    if (cond) cond.style.display = state.signOff.outcome === 'Approved with Conditions' ? 'block' : 'none';
+  }
+  // Special: review dashboard
+  if (stepIndex === 19) renderReviewDashboard();
+  // Special: risk summary
+  if (stepIndex === 16) updateRiskSummary();
+}
+
+// ============================================================
+// DYNAMIC TABLES
+// ============================================================
+const TABLE_CONFIGS = {
+  stakeholders: {
+    containerId: 'stakeholders-table',
+    columns: [
+      { key: 'name', label: 'Name', type: 'text' },
+      { key: 'role', label: 'Role / Title', type: 'text' },
+      { key: 'organisation', label: 'Organisation', type: 'text' },
+      { key: 'interest', label: 'Interest / Relevance', type: 'text' },
+      { key: 'contact', label: 'Contact', type: 'text' }
+    ],
+    getData: () => state.stakeholders,
+    setData: (d) => { state.stakeholders = d; }
+  },
+  consultations: {
+    containerId: 'consultations-table',
+    columns: [
+      { key: 'date', label: 'Date', type: 'date' },
+      { key: 'stakeholder', label: 'Stakeholder / Group', type: 'text' },
+      { key: 'method', label: 'Method', type: 'select', options: ['','Meeting','Email','Workshop','Survey','Phone Call','Other'] },
+      { key: 'topics', label: 'Key Topics', type: 'textarea' },
+      { key: 'outcomes', label: 'Outcomes', type: 'textarea' }
+    ],
+    getData: () => state.consultations,
+    setData: (d) => { state.consultations = d; }
+  },
+  'dataInventory.dataElements': {
+    containerId: 'dataElements-table',
+    columns: [
+      { key: 'element', label: 'Data Element', type: 'text' },
+      { key: 'description', label: 'Description', type: 'text' },
+      { key: 'source', label: 'Source', type: 'text' },
+      { key: 'legalBasis', label: 'Legal Basis', type: 'select', options: ['','Consent','Required by Law','Necessary for Health Service','Public Interest','Other'] },
+      { key: 'sensitivity', label: 'Sensitivity', type: 'select', options: ['','Low','Medium','High','Very High'] }
+    ],
+    getData: () => state.dataInventory.dataElements,
+    setData: (d) => { state.dataInventory.dataElements = d; }
+  },
+  risks: {
+    containerId: 'risks-table',
+    columns: [
+      { key: 'description', label: 'Risk Description', type: 'textarea' },
+      { key: 'relatedHpp', label: 'Related HPP(s)', type: 'text' },
+      { key: 'likelihood', label: 'Likelihood', type: 'select', options: ['','1 - Rare','2 - Unlikely','3 - Possible','4 - Likely','5 - Almost Certain'] },
+      { key: 'consequence', label: 'Consequence', type: 'select', options: ['','1 - Negligible','2 - Minor','3 - Moderate','4 - Major','5 - Severe'] },
+      { key: 'existingControls', label: 'Existing Controls', type: 'textarea' },
+      { key: 'mitigation', label: 'Additional Mitigation', type: 'textarea' },
+      { key: 'residualRisk', label: 'Residual Risk', type: 'select', options: ['','Low','Medium','High','Extreme'] },
+      { key: 'riskOwner', label: 'Risk Owner', type: 'text' },
+      { key: 'targetDate', label: 'Target Date', type: 'date' }
+    ],
+    getData: () => state.risks,
+    setData: (d) => { state.risks = d; }
+  },
+  actions: {
+    containerId: 'actions-table',
+    columns: [
+      { key: 'recommendation', label: 'Recommendation / Action', type: 'textarea' },
+      { key: 'source', label: 'Source', type: 'text' },
+      { key: 'priority', label: 'Priority', type: 'select', options: ['','Critical','High','Medium','Low'] },
+      { key: 'responsible', label: 'Responsible', type: 'text' },
+      { key: 'targetDate', label: 'Target Date', type: 'date' },
+      { key: 'status', label: 'Status', type: 'select', options: ['Not Started','In Progress','Completed'] },
+      { key: 'notes', label: 'Notes', type: 'text' }
+    ],
+    getData: () => state.actions,
+    setData: (d) => { state.actions = d; }
+  }
+};
+
+function renderDynamicTable(configKey) {
+  const config = TABLE_CONFIGS[configKey];
+  if (!config) return;
+  const container = document.getElementById(config.containerId);
+  if (!container) return;
+  const data = config.getData();
+
+  let html = '<table class="w-full border-collapse text-sm min-w-[600px]"><thead><tr>';
+  html += '<th class="border bg-slate-100 p-2 text-left text-xs">#</th>';
+  config.columns.forEach(col => {
+    html += `<th class="border bg-slate-100 p-2 text-left text-xs">${col.label}</th>`;
+  });
+  html += '<th class="border bg-slate-100 p-1 w-10"></th></tr></thead><tbody>';
+
+  data.forEach((row, i) => {
+    html += `<tr data-row="${i}">`;
+    html += `<td class="border p-1 text-center text-xs text-slate-500">${i + 1}</td>`;
+    config.columns.forEach(col => {
+      html += '<td class="border p-1">';
+      const val = escapeHtml(row[col.key] || '');
+      if (col.type === 'textarea') {
+        html += `<textarea data-table="${configKey}" data-index="${i}" data-col="${col.key}" rows="2" class="w-full border-0 text-sm p-1 resize-y focus:ring-1 focus:ring-primary outline-none rounded">${val}</textarea>`;
+      } else if (col.type === 'select') {
+        html += `<select data-table="${configKey}" data-index="${i}" data-col="${col.key}" class="w-full border-0 text-sm p-1 focus:ring-1 focus:ring-primary outline-none rounded">`;
+        col.options.forEach(opt => {
+          html += `<option value="${escapeHtml(opt)}" ${opt === row[col.key] ? 'selected' : ''}>${escapeHtml(opt || 'Select...')}</option>`;
+        });
+        html += '</select>';
+      } else {
+        html += `<input type="${col.type}" data-table="${configKey}" data-index="${i}" data-col="${col.key}" value="${val}" class="w-full border-0 text-sm p-1 focus:ring-1 focus:ring-primary outline-none rounded">`;
+      }
+      // Show calculated risk rating after consequence column
+      if (configKey === 'risks' && col.key === 'consequence') {
+        const rating = calculateRiskRating(row.likelihood, row.consequence);
+        if (rating) {
+          html += `</td><td class="border p-1 text-center" data-risk-rating="${i}"><span class="px-2 py-0.5 rounded text-xs font-medium risk-${rating.toLowerCase()}">${rating}</span>`;
+        }
+      }
+      html += '</td>';
+    });
+    html += `<td class="border p-1 text-center"><button onclick="removeRow('${configKey}', ${i})" class="text-danger hover:text-red-700 text-lg font-bold" title="Remove">&times;</button></td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+
+  // Inject rating column header for risks
+  if (configKey === 'risks') {
+    html = html.replace('</th></tr></thead>', '<th class="border bg-slate-100 p-2 text-left text-xs">Rating</th></th></tr></thead>');
+  }
+
+  container.innerHTML = html;
+
+  // Attach live listeners for risk rating recalculation
+  if (configKey === 'risks') {
+    container.querySelectorAll('select[data-col="likelihood"], select[data-col="consequence"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        collectDynamicTableData(configKey);
+        renderDynamicTable(configKey);
+        updateRiskSummary();
+      });
+    });
+  }
+}
+
+function renderAllDynamicTables() {
+  Object.keys(TABLE_CONFIGS).forEach(key => {
+    if (document.getElementById(TABLE_CONFIGS[key].containerId)) {
+      renderDynamicTable(key);
+    }
+  });
+}
+
+function collectDynamicTableData(configKey) {
+  const config = TABLE_CONFIGS[configKey];
+  if (!config) return;
+  const data = config.getData();
+  document.querySelectorAll(`[data-table="${configKey}"]`).forEach(el => {
+    const idx = parseInt(el.getAttribute('data-index'));
+    const col = el.getAttribute('data-col');
+    if (data[idx]) data[idx][col] = el.value;
+  });
+}
+
+function collectDynamicTables() {
+  Object.keys(TABLE_CONFIGS).forEach(key => collectDynamicTableData(key));
+}
+
+function addRow(configKey, template) {
+  collectCurrentStepData();
+  const config = TABLE_CONFIGS[configKey];
+  if (config) {
+    config.getData().push({ ...template });
+    renderDynamicTable(configKey);
+  }
+}
+
+function removeRow(configKey, index) {
+  collectDynamicTableData(configKey);
+  const config = TABLE_CONFIGS[configKey];
+  if (config) {
+    const data = config.getData();
+    if (data.length <= 1) return; // keep at least one row
+    data.splice(index, 1);
+    renderDynamicTable(configKey);
+  }
+}
+
+function calculateRiskRating(likelihood, consequence) {
+  const l = parseInt(likelihood);
+  const c = parseInt(consequence);
+  if (isNaN(l) || isNaN(c)) return '';
+  const score = l * c;
+  if (score >= 20) return 'Extreme';
+  if (score >= 12) return 'High';
+  if (score >= 5) return 'Medium';
+  return 'Low';
+}
+
+function updateRiskSummary() {
+  const summary = document.getElementById('risk-summary');
+  if (!summary) return;
+  const counts = { Low: 0, Medium: 0, High: 0, Extreme: 0 };
+  state.risks.forEach(r => {
+    const rating = calculateRiskRating(r.likelihood, r.consequence);
+    if (rating && counts[rating] !== undefined) counts[rating]++;
+  });
+  summary.innerHTML = `
+    <h4 class="font-semibold mb-2">Risk Summary</h4>
+    <div class="flex gap-4 flex-wrap">
+      <span class="px-3 py-1 rounded text-sm risk-low font-medium">Low: ${counts.Low}</span>
+      <span class="px-3 py-1 rounded text-sm risk-medium font-medium">Medium: ${counts.Medium}</span>
+      <span class="px-3 py-1 rounded text-sm risk-high font-medium">High: ${counts.High}</span>
+      <span class="px-3 py-1 rounded text-sm risk-extreme font-medium">Extreme: ${counts.Extreme}</span>
+    </div>
+  `;
+}
+
+function importFromHPP() {
+  collectCurrentStepData();
+  let imported = 0;
+  HPP_DATA.forEach(hpp => {
+    const analysis = state.hppAnalysis[hpp.stateKey];
+    if (analysis && analysis.recommendations && analysis.recommendations.trim()) {
+      // Check if already imported
+      const exists = state.actions.some(a => a.source === `HPP ${hpp.number}` && a.recommendation === analysis.recommendations.trim());
+      if (!exists) {
+        state.actions.push({
+          recommendation: analysis.recommendations.trim(),
+          source: `HPP ${hpp.number}`,
+          priority: analysis.priority || '',
+          responsible: analysis.responsiblePerson || '',
+          targetDate: analysis.targetDate || '',
+          status: 'Not Started',
+          notes: ''
+        });
+        imported++;
+      }
+    }
+  });
+  renderDynamicTable('actions');
+  if (imported > 0) alert(`Imported ${imported} recommendation(s) from HPP analysis.`);
+  else alert('No new recommendations to import. Either HPP recommendations are empty or already imported.');
+}
+
+// ============================================================
+// REVIEW DASHBOARD
+// ============================================================
+function renderReviewDashboard() {
+  const dash = document.getElementById('review-dashboard');
+  if (!dash) return;
+
+  // HPP compliance summary
+  let hppHtml = '<h3 class="font-semibold text-lg mb-3">HPP Compliance Overview</h3><div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-6">';
+  HPP_DATA.forEach(hpp => {
+    const status = state.hppAnalysis[hpp.stateKey]?.complianceStatus || '';
+    let badgeClass = 'bg-slate-200 text-slate-600';
+    if (status === 'Compliant') badgeClass = 'compliance-compliant';
+    else if (status === 'Partially Compliant') badgeClass = 'compliance-partial';
+    else if (status === 'Non-Compliant') badgeClass = 'compliance-non';
+    else if (status === 'Not Applicable') badgeClass = 'compliance-na';
+    hppHtml += `<div class="border rounded p-2 text-center">
+      <div class="text-xs font-medium text-slate-600 mb-1">HPP ${hpp.number}</div>
+      <span class="text-xs px-2 py-0.5 rounded ${badgeClass}">${status || 'Not assessed'}</span>
+    </div>`;
+  });
+  hppHtml += '</div>';
+
+  // Risk summary
+  const riskCounts = { Low: 0, Medium: 0, High: 0, Extreme: 0 };
+  state.risks.forEach(r => {
+    const rating = calculateRiskRating(r.likelihood, r.consequence);
+    if (rating && riskCounts[rating] !== undefined) riskCounts[rating]++;
+  });
+
+  // Action status summary
+  const actionCounts = { 'Not Started': 0, 'In Progress': 0, 'Completed': 0 };
+  state.actions.forEach(a => {
+    if (actionCounts[a.status] !== undefined) actionCounts[a.status]++;
+  });
+
+  let summaryHtml = '<div class="grid sm:grid-cols-2 gap-4 mb-6">';
+  summaryHtml += `<div class="border rounded-lg p-4"><h4 class="font-semibold mb-2">Risk Summary</h4>
+    <div class="space-y-1 text-sm">
+      <div class="flex justify-between"><span>Low</span><span class="font-medium">${riskCounts.Low}</span></div>
+      <div class="flex justify-between"><span>Medium</span><span class="font-medium">${riskCounts.Medium}</span></div>
+      <div class="flex justify-between"><span>High</span><span class="font-medium">${riskCounts.High}</span></div>
+      <div class="flex justify-between"><span>Extreme</span><span class="font-medium">${riskCounts.Extreme}</span></div>
+    </div>
+  </div>`;
+  summaryHtml += `<div class="border rounded-lg p-4"><h4 class="font-semibold mb-2">Action Items</h4>
+    <div class="space-y-1 text-sm">
+      <div class="flex justify-between"><span>Not Started</span><span class="font-medium">${actionCounts['Not Started']}</span></div>
+      <div class="flex justify-between"><span>In Progress</span><span class="font-medium">${actionCounts['In Progress']}</span></div>
+      <div class="flex justify-between"><span>Completed</span><span class="font-medium">${actionCounts['Completed']}</span></div>
+    </div>
+  </div>`;
+  summaryHtml += '</div>';
+
+  dash.innerHTML = hppHtml + summaryHtml;
+}
+
+// ============================================================
+// REPORT GENERATION
+// ============================================================
+function generateReportHTML() {
+  const s = state;
+  const p = s.projectOverview;
+  let html = '';
+
+  // Inline styles for PDF
+  const styles = `
+    <style>
+      body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1e293b; }
+      h1 { font-size: 22pt; color: #1e40af; margin-bottom: 4px; }
+      h2 { font-size: 16pt; color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 4px; margin-top: 24px; }
+      h3 { font-size: 13pt; color: #334155; margin-top: 16px; }
+      table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10pt; }
+      th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+      th { background-color: #f1f5f9; font-weight: 600; }
+      .cover { text-align: center; padding: 60px 0; border: 3px solid #1e40af; margin: 40px 0; }
+      .cover .subtitle { color: #64748b; font-size: 14pt; }
+      .field-label { font-weight: 600; color: #475569; min-width: 180px; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 9pt; font-weight: 600; }
+      .badge-green { background: #dcfce7; color: #166534; }
+      .badge-amber { background: #fef3c7; color: #92400e; }
+      .badge-red { background: #fee2e2; color: #991b1b; }
+      .badge-grey { background: #f1f5f9; color: #475569; }
+      .guidance { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 14px; margin: 8px 0; font-size: 10pt; }
+      .page-break { page-break-before: always; }
+      .risk-low-cell { background: #dcfce7; }
+      .risk-medium-cell { background: #fef3c7; }
+      .risk-high-cell { background: #ffedd5; }
+      .risk-extreme-cell { background: #fee2e2; }
+      ul { margin: 4px 0; padding-left: 20px; }
+      p { margin: 4px 0; }
+      .whitespace { white-space: pre-wrap; }
+    </style>
+  `;
+
+  // Cover
+  html += styles;
+  html += `<div class="cover">
+    <h1>Privacy Impact Assessment</h1>
+    <p class="subtitle">Under the Health Records Act 2001 (Vic)</p>
+    <p class="subtitle" style="margin-top:20px; font-size:16pt; color:#1e293b;">${escapeHtml(p.projectName || 'Untitled Project')}</p>
+    <p style="margin-top:12px; color:#64748b;">${escapeHtml(p.organisation || '')}</p>
+    <p style="margin-top:8px; color:#64748b;">Date: ${p.assessmentDate || ''} &nbsp;|&nbsp; Version: ${escapeHtml(p.version || '1.0')} &nbsp;|&nbsp; Status: ${escapeHtml(p.status || 'Draft')}</p>
+  </div>`;
+
+  // Table of Contents
+  html += '<div class="page-break"><h2>Table of Contents</h2><ol style="font-size:11pt; line-height:2;">';
+  const tocSections = ['Project Overview','Stakeholder Register','Consultation Log','Data Inventory','Data Flow Description',
+    ...HPP_DATA.map(h => `HPP ${h.number} — ${h.name}`),
+    'Risk Assessment','Recommendations & Action Items','Sign-off & Approval'];
+  tocSections.forEach((s, i) => { html += `<li>${s}</li>`; });
+  html += '</ol></div>';
+
+  // Section 1: Project Overview
+  html += `<div class="page-break"><h2>1. Project Overview</h2>
+    <table>
+      <tr><td class="field-label">Project Name</td><td>${escapeHtml(p.projectName)}</td></tr>
+      <tr><td class="field-label">Project ID</td><td>${escapeHtml(p.projectId)}</td></tr>
+      <tr><td class="field-label">Description</td><td class="whitespace">${escapeHtml(p.description)}</td></tr>
+      <tr><td class="field-label">Sponsor</td><td>${escapeHtml(p.sponsor)}</td></tr>
+      <tr><td class="field-label">Manager</td><td>${escapeHtml(p.manager)}</td></tr>
+      <tr><td class="field-label">Organisation</td><td>${escapeHtml(p.organisation)}</td></tr>
+      <tr><td class="field-label">Business Unit</td><td>${escapeHtml(p.businessUnit)}</td></tr>
+      <tr><td class="field-label">Assessment Date</td><td>${p.assessmentDate}</td></tr>
+      <tr><td class="field-label">Version</td><td>${escapeHtml(p.version)}</td></tr>
+      <tr><td class="field-label">Status</td><td>${escapeHtml(p.status)}</td></tr>
+    </table>
+  </div>`;
+
+  // Section 2: Stakeholder Register
+  html += `<div class="page-break"><h2>2. Stakeholder Register</h2><table>
+    <tr><th>#</th><th>Name</th><th>Role / Title</th><th>Organisation</th><th>Interest</th><th>Contact</th></tr>`;
+  s.stakeholders.forEach((sh, i) => {
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(sh.name)}</td><td>${escapeHtml(sh.role)}</td><td>${escapeHtml(sh.organisation)}</td><td>${escapeHtml(sh.interest)}</td><td>${escapeHtml(sh.contact)}</td></tr>`;
+  });
+  html += '</table></div>';
+
+  // Section 3: Consultation Log
+  html += `<div class="page-break"><h2>3. Consultation Log</h2><table>
+    <tr><th>#</th><th>Date</th><th>Stakeholder</th><th>Method</th><th>Key Topics</th><th>Outcomes</th></tr>`;
+  s.consultations.forEach((c, i) => {
+    html += `<tr><td>${i+1}</td><td>${c.date}</td><td>${escapeHtml(c.stakeholder)}</td><td>${escapeHtml(c.method)}</td><td class="whitespace">${escapeHtml(c.topics)}</td><td class="whitespace">${escapeHtml(c.outcomes)}</td></tr>`;
+  });
+  html += '</table></div>';
+
+  // Section 4: Data Inventory
+  html += `<div class="page-break"><h2>4. Data Inventory</h2>
+    <h3>A. Information Collected</h3><table>
+    <tr><th>#</th><th>Data Element</th><th>Description</th><th>Source</th><th>Legal Basis</th><th>Sensitivity</th></tr>`;
+  s.dataInventory.dataElements.forEach((d, i) => {
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(d.element)}</td><td>${escapeHtml(d.description)}</td><td>${escapeHtml(d.source)}</td><td>${escapeHtml(d.legalBasis)}</td><td>${escapeHtml(d.sensitivity)}</td></tr>`;
+  });
+  html += '</table>';
+  html += `<h3>B. Use, Storage, and Disclosure</h3><table>
+    <tr><td class="field-label">Usage</td><td class="whitespace">${escapeHtml(s.dataInventory.usage)}</td></tr>
+    <tr><td class="field-label">Storage</td><td class="whitespace">${escapeHtml(s.dataInventory.storage)}</td></tr>
+    <tr><td class="field-label">Storage Format</td><td>${escapeHtml(s.dataInventory.storageFormat)}</td></tr>
+    <tr><td class="field-label">Retention Period</td><td>${escapeHtml(s.dataInventory.retentionPeriod)}</td></tr>
+    <tr><td class="field-label">Access</td><td class="whitespace">${escapeHtml(s.dataInventory.access)}</td></tr>
+    <tr><td class="field-label">Disclosure</td><td class="whitespace">${escapeHtml(s.dataInventory.disclosure)}</td></tr>
+    <tr><td class="field-label">De-identified</td><td>${escapeHtml(s.dataInventory.deIdentified)}</td></tr>
+  </table></div>`;
+
+  // Section 5: Data Flow
+  html += `<div class="page-break"><h2>5. Data Flow Description</h2><table>
+    <tr><td class="field-label">Narrative</td><td class="whitespace">${escapeHtml(s.dataFlow.narrative)}</td></tr>
+    <tr><td class="field-label">Collection Points</td><td class="whitespace">${escapeHtml(s.dataFlow.collectionPoints)}</td></tr>
+    <tr><td class="field-label">Processing Steps</td><td class="whitespace">${escapeHtml(s.dataFlow.processingSteps)}</td></tr>
+    <tr><td class="field-label">Storage Locations</td><td class="whitespace">${escapeHtml(s.dataFlow.storageLocations)}</td></tr>
+    <tr><td class="field-label">Disclosure Points</td><td class="whitespace">${escapeHtml(s.dataFlow.disclosurePoints)}</td></tr>
+    <tr><td class="field-label">Disposal Process</td><td class="whitespace">${escapeHtml(s.dataFlow.disposalProcess)}</td></tr>
+  </table></div>`;
+
+  // Sections 6-16: HPP Analysis
+  HPP_DATA.forEach((hpp, i) => {
+    const a = s.hppAnalysis[hpp.stateKey] || {};
+    let statusBadge = '<span class="badge badge-grey">Not assessed</span>';
+    if (a.complianceStatus === 'Compliant') statusBadge = '<span class="badge badge-green">Compliant</span>';
+    else if (a.complianceStatus === 'Partially Compliant') statusBadge = '<span class="badge badge-amber">Partially Compliant</span>';
+    else if (a.complianceStatus === 'Non-Compliant') statusBadge = '<span class="badge badge-red">Non-Compliant</span>';
+    else if (a.complianceStatus === 'Not Applicable') statusBadge = '<span class="badge badge-grey">Not Applicable</span>';
+
+    html += `<div class="page-break"><h2>${6 + i}. HPP ${hpp.number} — ${hpp.name}</h2>
+      <div class="guidance"><strong>Principle:</strong> ${hpp.guidance}</div>
+      <p><strong>Compliance Status:</strong> ${statusBadge}</p>
+      <table>
+        <tr><td class="field-label">Current Practices</td><td class="whitespace">${escapeHtml(a.currentPractices)}</td></tr>
+        <tr><td class="field-label">Gaps Identified</td><td class="whitespace">${escapeHtml(a.gaps)}</td></tr>
+        <tr><td class="field-label">Recommended Actions</td><td class="whitespace">${escapeHtml(a.recommendations)}</td></tr>
+        <tr><td class="field-label">Priority</td><td>${escapeHtml(a.priority)}</td></tr>
+        <tr><td class="field-label">Responsible</td><td>${escapeHtml(a.responsiblePerson)}</td></tr>
+        <tr><td class="field-label">Target Date</td><td>${a.targetDate || ''}</td></tr>
+        <tr><td class="field-label">Notes</td><td class="whitespace">${escapeHtml(a.notes)}</td></tr>
+      </table>
+    </div>`;
+  });
+
+  // Section 17: Risk Assessment
+  html += `<div class="page-break"><h2>17. Risk Assessment</h2><table>
+    <tr><th>#</th><th>Description</th><th>HPP(s)</th><th>Likelihood</th><th>Consequence</th><th>Rating</th><th>Existing Controls</th><th>Mitigation</th><th>Residual</th><th>Owner</th><th>Target</th></tr>`;
+  s.risks.forEach((r, i) => {
+    const rating = calculateRiskRating(r.likelihood, r.consequence);
+    const ratingClass = rating ? `risk-${rating.toLowerCase()}-cell` : '';
+    html += `<tr><td>R-${String(i+1).padStart(3,'0')}</td><td class="whitespace">${escapeHtml(r.description)}</td><td>${escapeHtml(r.relatedHpp)}</td><td>${escapeHtml(r.likelihood)}</td><td>${escapeHtml(r.consequence)}</td><td class="${ratingClass}" style="font-weight:600;">${rating}</td><td class="whitespace">${escapeHtml(r.existingControls)}</td><td class="whitespace">${escapeHtml(r.mitigation)}</td><td>${escapeHtml(r.residualRisk)}</td><td>${escapeHtml(r.riskOwner)}</td><td>${r.targetDate || ''}</td></tr>`;
+  });
+  html += '</table></div>';
+
+  // Section 18: Recommendations
+  html += `<div class="page-break"><h2>18. Recommendations & Action Items</h2><table>
+    <tr><th>#</th><th>Recommendation</th><th>Source</th><th>Priority</th><th>Responsible</th><th>Target Date</th><th>Status</th><th>Notes</th></tr>`;
+  s.actions.forEach((a, i) => {
+    html += `<tr><td>A-${String(i+1).padStart(3,'0')}</td><td class="whitespace">${escapeHtml(a.recommendation)}</td><td>${escapeHtml(a.source)}</td><td>${escapeHtml(a.priority)}</td><td>${escapeHtml(a.responsible)}</td><td>${a.targetDate || ''}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.notes)}</td></tr>`;
+  });
+  html += '</table></div>';
+
+  // Section 19: Sign-off
+  html += `<div class="page-break"><h2>19. Sign-off & Approval</h2>`;
+  ['assessor', 'reviewer', 'approver'].forEach(role => {
+    const r = s.signOff[role];
+    html += `<h3 style="text-transform:capitalize;">${role}</h3><table>
+      <tr><td class="field-label">Name</td><td>${escapeHtml(r.name)}</td></tr>
+      <tr><td class="field-label">Position</td><td>${escapeHtml(r.position)}</td></tr>
+      <tr><td class="field-label">Organisation</td><td>${escapeHtml(r.organisation)}</td></tr>
+      <tr><td class="field-label">Date</td><td>${r.date || ''}</td></tr>
+      <tr><td class="field-label">Signature</td><td><em>${escapeHtml(r.signature)}</em></td></tr>
+      <tr><td class="field-label">Comments</td><td class="whitespace">${escapeHtml(r.comments)}</td></tr>
+    </table>`;
+  });
+  html += `<h3>Outcome</h3><table>
+    <tr><td class="field-label">PIA Outcome</td><td>${escapeHtml(s.signOff.outcome)}</td></tr>
+    ${s.signOff.conditions ? `<tr><td class="field-label">Conditions</td><td class="whitespace">${escapeHtml(s.signOff.conditions)}</td></tr>` : ''}
+    <tr><td class="field-label">Next Review Date</td><td>${s.signOff.nextReviewDate || ''}</td></tr>
+  </table></div>`;
+
+  document.getElementById('report-content').innerHTML = html;
+}
+
+// ============================================================
+// EXPORT / IMPORT
+// ============================================================
+function showPreview() {
+  collectCurrentStepData();
+  generateReportHTML();
+  document.getElementById('report-preview-modal').classList.add('active');
+}
+
+function closePreview() {
+  document.getElementById('report-preview-modal').classList.remove('active');
+}
+
+function exportPDF() {
+  collectCurrentStepData();
+  generateReportHTML();
+  const el = document.getElementById('report-content');
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `PIA-${state.projectOverview.projectName || 'Assessment'}-${dateStr}.pdf`;
+
+  document.getElementById('loading-overlay').style.display = 'flex';
+
+  const options = {
+    margin: [15, 15, 15, 15],
+    filename: filename,
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.page-break' }
+  };
+
+  html2pdf().set(options).from(el).save().then(() => {
+    document.getElementById('loading-overlay').style.display = 'none';
+  }).catch(err => {
+    document.getElementById('loading-overlay').style.display = 'none';
+    alert('PDF generation failed: ' + err.message);
+  });
+}
+
+function exportJSON() {
+  collectCurrentStepData();
+  const data = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), state }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `PIA-${state.projectOverview.projectName || 'Assessment'}-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed.state) throw new Error('Invalid file format');
+      if (!confirm('This will replace all current data. Continue?')) return;
+      state = parsed.state;
+      saveState();
+      navigateTo(state.currentStep || 0);
+      alert('Data imported successfully.');
+    } catch (err) {
+      alert('Failed to import: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // reset file input
+}
+
+function resetForm() {
+  if (!confirm('This will permanently delete all assessment data. Are you sure?')) return;
+  if (!confirm('This cannot be undone. Really delete everything?')) return;
+  localStorage.removeItem(APP_KEY);
+  state = getDefaultState();
+  navigateTo(0);
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+// ============================================================
+// AUTO-SAVE
+// ============================================================
+let saveTimeout;
+document.addEventListener('input', (e) => {
+  if (e.target.closest('#wizard-container')) {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      collectCurrentStepData();
+      saveState();
+    }, 500);
+  }
+});
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
+function initApp() {
+  const loaded = loadState();
+  if (loaded) {
+    // Merge loaded state with defaults to handle any new fields
+    const defaults = getDefaultState();
+    state = { ...defaults, ...loaded };
+    // Deep merge hppAnalysis
+    if (loaded.hppAnalysis) {
+      HPP_DATA.forEach(h => {
+        state.hppAnalysis[h.stateKey] = { ...defaults.hppAnalysis[h.stateKey], ...(loaded.hppAnalysis[h.stateKey] || {}) };
+      });
+    }
+    // Deep merge signOff
+    if (loaded.signOff) {
+      ['assessor', 'reviewer', 'approver'].forEach(role => {
+        state.signOff[role] = { ...defaults.signOff[role], ...(loaded.signOff[role] || {}) };
+      });
+    }
+    // Ensure arrays exist
+    if (!Array.isArray(state.stakeholders) || state.stakeholders.length === 0) state.stakeholders = defaults.stakeholders;
+    if (!Array.isArray(state.consultations) || state.consultations.length === 0) state.consultations = defaults.consultations;
+    if (!state.dataInventory || !Array.isArray(state.dataInventory.dataElements) || state.dataInventory.dataElements.length === 0) {
+      state.dataInventory = { ...defaults.dataInventory, ...(state.dataInventory || {}) };
+      if (!Array.isArray(state.dataInventory.dataElements) || state.dataInventory.dataElements.length === 0) {
+        state.dataInventory.dataElements = defaults.dataInventory.dataElements;
+      }
+    }
+    if (!Array.isArray(state.risks) || state.risks.length === 0) state.risks = defaults.risks;
+    if (!Array.isArray(state.actions) || state.actions.length === 0) state.actions = defaults.actions;
+  }
+
+  buildWizardSteps();
+  buildProgressBar();
+  navigateTo(state.currentStep || 0);
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>
