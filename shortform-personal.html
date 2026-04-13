@@ -1355,8 +1355,9 @@ function importJSON(event) {
       RISK_ITEMS.forEach(r => { if (!state.risks.items[r.key]) state.risks.items[r.key] = { checked: false, mitigation: '' }; });
       if (!state.risks.items.other) state.risks.items.other = { checked: false, description: '', mitigation: '' };
       if (!state.actions.table || state.actions.table.length === 0) state.actions.table = [{ risk: '', action: '', who: '', byWhen: '' }];
+      state.currentStep = Math.min(Math.max(state.currentStep || 0, 0), STEP_BUILDERS.length - 1);
       saveState();
-      navigateTo(state.currentStep || 0);
+      navigateTo(state.currentStep);
       alert('Data imported successfully.');
     } catch (err) {
       alert('Failed to import: ' + err.message);
