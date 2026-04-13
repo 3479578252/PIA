@@ -6,6 +6,7 @@
 <title>Privacy Impact Assessment — Health Records Act 2001 (Vic)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -98,6 +99,7 @@ tailwind.config = {
     <h2 class="font-bold text-lg">Report Preview</h2>
     <div class="flex gap-2">
       <button onclick="exportPDF()" class="px-4 py-1.5 bg-primary text-white rounded text-sm hover:bg-primary-light">Download PDF</button>
+      <button onclick="exportWord()" class="px-4 py-1.5 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700">Download Word</button>
       <button onclick="closePreview()" class="px-4 py-1.5 bg-slate-200 text-slate-700 rounded text-sm hover:bg-slate-300">Close</button>
     </div>
   </div>
@@ -497,6 +499,7 @@ function buildWizardSteps() {
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
       <button onclick="showPreview()" class="px-4 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary-light transition-colors">Preview Full Report</button>
       <button onclick="exportPDF()" class="px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-500 transition-colors">Download PDF</button>
+      <button onclick="exportWord()" class="px-4 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors">Download Word</button>
       <button onclick="exportJSON()" class="px-4 py-3 bg-secondary text-white rounded-lg font-medium hover:opacity-90 transition-opacity">Export JSON Backup</button>
       <button onclick="document.getElementById('import-json').click()" class="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition-colors">Import JSON</button>
       <input type="file" id="import-json" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -1190,6 +1193,21 @@ function exportPDF() {
     document.getElementById('loading-overlay').style.display = 'none';
     alert('PDF generation failed: ' + err.message);
   });
+}
+
+function exportWord() {
+  collectCurrentStepData();
+  generateReportHTML();
+  const html = document.getElementById('report-content').innerHTML;
+  const projectName = state.projectOverview.projectName || 'Assessment';
+  const dateStr = new Date().toISOString().split('T')[0];
+  const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>PIA - ${projectName}</title></head><body>${html}</body></html>`;
+  const blob = htmlDocx.asBlob(fullHtml);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `PIA-${projectName.replace(/[^a-z0-9]/gi, '-')}-${dateStr}.docx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function exportJSON() {
